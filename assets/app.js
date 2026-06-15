@@ -13,7 +13,6 @@ const STATUS = {
   offen:            { label: 'Offen',          cls: 'bg-slate-100 text-slate-700' },
   angefragt:        { label: 'Angefragt',      cls: 'bg-blue-50 text-blue-700' },
   warten:           { label: 'Warten',         cls: 'bg-amber-50 text-amber-700' },
-  antwort_positiv:  { label: 'Zusage',         cls: 'bg-green-50 text-green-700' },
   antwort_negativ:  { label: 'Absage',         cls: 'bg-red-50 text-red-700' },
   kooperiert:       { label: 'Partner',        cls: 'bg-violet-50 text-violet-700' },
   ausgeschlossen:   { label: 'Ausgeschlossen', cls: 'bg-zinc-100 text-zinc-500' },
@@ -181,7 +180,7 @@ function olderThanDays(dateStr, days) {
 
 // ===================== DOPPELKONTAKT-SCHUTZ =====================
 // "Bereits im Kontakt" = wir haben diesen Kanal schon angefasst.
-const CONTACTED = new Set(['angefragt', 'warten', 'antwort_positiv', 'kooperiert']);
+const CONTACTED = new Set(['angefragt', 'warten', 'kooperiert']);
 let contactIndex = { byPerson: new Map(), byEmail: new Map() };
 
 function normStr(s) { return (s || '').trim().toLowerCase(); }
@@ -342,7 +341,6 @@ const QUICK_CHIPS = [
   { key: 'bereit', label: 'Bereit zum Anschreiben' },
   { key: 'nachfassen', label: 'Nachfassen fällig' },
   { key: 'ohne_email', label: 'Ohne E-Mail' },
-  { key: 'zusagen', label: 'Zusagen' },
   { key: 'warten', label: 'Warten' },
   { key: 'partner', label: 'Partner' },
   { key: 'ausgeschlossen', label: 'Ausgeschlossen' },
@@ -362,7 +360,7 @@ function applyQuick(key) {
   quickFilter = null;
   activeQuick = key;
   const s = $('filter-status');
-  const map = { bereit: 'offen', zusagen: 'antwort_positiv', warten: 'warten', partner: 'kooperiert', ausgeschlossen: 'ausgeschlossen' };
+  const map = { bereit: 'offen', warten: 'warten', partner: 'kooperiert', ausgeschlossen: 'ausgeschlossen' };
   if (key === 'aktiv') s.value = '';
   else if (key === 'nachfassen') { s.value = 'angefragt'; quickFilter = 'nachfassen'; }
   else if (key === 'ohne_email') { s.value = ''; quickFilter = 'ohne_email'; }
@@ -390,7 +388,7 @@ function rowHtml(h) {
         ${STATUS_KEYS.map((k) => `<option value="${k}" ${k === h.status ? 'selected' : ''}>${STATUS[k].label}</option>`).join('')}
       </select>
     </td>
-    <td class="px-3 py-2.5 align-top text-zinc-600 whitespace-nowrap">${h.angefragt_am ? formatDate(h.angefragt_am) : '<span class="text-zinc-300">—</span>'}</td>
+    <td class="px-3 py-2.5 align-top text-zinc-600 whitespace-nowrap">${dateCell(h)}</td>
     <td class="px-3 py-2.5 align-top text-zinc-600">
       ${conflict ? '<div class="text-amber-600 text-xs mb-0.5" title="Gleiche Ansprechperson/E-Mail wie ein bereits kontaktiertes Hotel – vor dem Anschreiben prüfen">⚠ Sammelkontakt</div>' : ''}
       ${contactName ? `<div>${escapeHtml(contactName)}</div>` : ''}
@@ -520,6 +518,14 @@ function csvCell(v) {
   if (v == null) return '';
   const s = String(v);
   return /[";\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
+// Datumsspalte: bei Partnern das Besuchs-/Kooperationsdatum (Spalte H), sonst Anfrage-Datum
+function dateCell(h) {
+  if (h.status === 'kooperiert' && h.besucht) {
+    const v = String(h.besucht).replace(' 00:00:00', '');
+    return `<span class="text-violet-700" title="Besuch / Kooperation (Excel Spalte H)">🏨 ${escapeHtml(v)}</span>`;
+  }
+  return h.angefragt_am ? formatDate(h.angefragt_am) : '<span class="text-zinc-300">—</span>';
 }
 function formatDate(d) {
   const dt = new Date(d);
