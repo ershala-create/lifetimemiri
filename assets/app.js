@@ -341,7 +341,7 @@ function groupedHtml(rows) {
       ? `<button data-research="${escapeAttr(k)}" class="ml-2 px-2 py-0.5 rounded-md border border-zinc-200 bg-white hover:bg-zinc-50 text-xs font-normal">🔍 mehr aus dieser Gruppe</button>`
       : '';
     html += `<tr data-group-key="${escapeAttr(k)}" class="bg-zinc-50 cursor-pointer select-none">
-      <td colspan="8" class="px-3 py-2 font-medium text-zinc-700">
+      <td colspan="7" class="px-3 py-2 font-medium text-zinc-700">
         <span class="text-zinc-400 mr-1">${collapsed ? '▸' : '▾'}</span>${escapeHtml(groupLabelOf(k))}
         <span class="text-zinc-400 font-normal">(${items.length})</span>${researchBtn}
       </td></tr>`;
@@ -453,13 +453,9 @@ function gruppeHotelCard(h) {
   const meta = [h.ort, h.land].filter(Boolean).join(', ');
   return `
   <div class="bg-white border border-zinc-200 rounded-xl card-shadow px-4 py-3">
-    <div class="flex items-start justify-between gap-3">
-      <div class="min-w-0">
-        <div class="font-medium text-zinc-900 text-sm">${escapeHtml(h.hotelname)}</div>
-        <div class="text-xs text-zinc-400 mt-0.5">${escapeHtml(meta || '—')}${datum ? ' · angefragt ' + datum : ''}</div>
-      </div>
-      <button data-mail="${h.id}" class="shrink-0 px-3 py-1.5 rounded-lg border border-zinc-200 hover:bg-zinc-50 text-xs whitespace-nowrap" ${mail ? '' : 'disabled style="opacity:.4"'}>✉ E-Mail</button>
-    </div>
+    <div class="font-medium text-zinc-900 text-sm">${escapeHtml(h.hotelname)}</div>
+    <div class="text-xs text-zinc-400 mt-0.5">${escapeHtml(meta || '—')}${datum ? ' · angefragt ' + datum : ''}</div>
+    ${mail ? `<div class="text-xs text-zinc-400 font-mono break-all mt-0.5">${escapeHtml(mail)}</div>` : ''}
     <div class="mt-2">
       <select data-id="${h.id}" class="${statusSelectCls(h.status)}">
         ${STATUS_KEYS.map((k) => `<option value="${k}" ${k === h.status ? 'selected' : ''}>${STATUS[k].label}</option>`).join('')}
@@ -474,9 +470,6 @@ function wireGruppenCards(container) {
       const ok = await updateStatus(e.target.dataset.id, e.target.value);
       if (ok) renderGruppen();
     });
-  });
-  container.querySelectorAll('button[data-mail]').forEach((b) => {
-    b.addEventListener('click', () => openEmail(b.dataset.mail));
   });
 }
 
@@ -560,13 +553,10 @@ function rowHtml(h) {
     <td class="px-3 py-2.5 align-top text-zinc-600 max-w-[240px] hidden md:table-cell">
       ${h.bemerkung ? `<span class="text-xs" title="${escapeAttr(h.bemerkung)}">${escapeHtml(h.bemerkung)}</span>` : '<span class="text-zinc-300">—</span>'}
     </td>
-    <td class="px-3 py-2.5 align-top text-zinc-600">
+    <td class="px-3 py-2.5 align-top text-zinc-600 max-w-[220px]">
       ${conflict ? '<div class="text-amber-600 text-xs mb-0.5" title="Gleiche Ansprechperson/E-Mail wie ein bereits kontaktiertes Hotel – vor dem Anschreiben prüfen">⚠ Sammelkontakt</div>' : ''}
       ${contactName ? `<div>${escapeHtml(contactName)}</div>` : ''}
-      ${contactMail ? `<div class="text-xs text-zinc-400 font-mono">${escapeHtml(contactMail)}</div>` : '<span class="text-zinc-300">—</span>'}
-    </td>
-    <td class="px-3 py-2.5 align-top text-right">
-      <button data-mail="${h.id}" class="px-2.5 py-1 rounded-lg border border-zinc-200 hover:bg-zinc-50 text-xs whitespace-nowrap" ${contactMail ? '' : 'disabled style="opacity:.4"'}>✉ E-Mail</button>
+      ${contactMail ? `<div class="text-xs text-zinc-400 font-mono break-all">${escapeHtml(contactMail)}</div>` : '<span class="text-zinc-300">—</span>'}
     </td>
   </tr>`;
 }
