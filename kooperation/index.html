@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>HeritageTraveler · Hotel-Kooperationen</title>
+  <title>lifetimemiri · Kooperationen</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
@@ -40,9 +40,9 @@
       <div class="mb-6">
         <div class="text-xs font-mono uppercase tracking-widest text-zinc-400 mb-1">lifetimemiri</div>
         <h1 class="text-xl font-semibold">Anmelden</h1>
-        <p class="text-zinc-500 text-xs mt-1">Heritage · Hotels verwalten</p>
+        <p class="text-zinc-500 text-xs mt-1">Kooperationen verwalten</p>
       </div>
-      <!-- Step 1: E-Mail + Sicherheitsprüfung -> Code anfordern -->
+      <!-- Step 1: E-Mail + Sicherheitspruefung -> Code anfordern -->
       <div id="step-email" class="space-y-3">
         <div>
           <label class="block text-xs text-zinc-500 mb-1">E-Mail</label>
@@ -85,8 +85,8 @@
           </div>
           <!-- ===================== BEREICHS-UMSCHALTER ===================== -->
           <nav class="flex items-center gap-1 p-0.5 rounded-lg bg-zinc-100 border border-zinc-200 text-xs font-medium shrink-0">
-            <span class="px-3 py-1.5 rounded-md bg-white text-zinc-900 shadow-sm">Heritage</span>
-            <a href="kooperation/" class="px-3 py-1.5 rounded-md text-zinc-500 hover:text-zinc-900 transition-colors">Kooperationen</a>
+            <a href="../" class="px-3 py-1.5 rounded-md text-zinc-500 hover:text-zinc-900 transition-colors">Heritage</a>
+            <span class="px-3 py-1.5 rounded-md bg-white text-zinc-900 shadow-sm">Kooperationen</span>
           </nav>
         </div>
         <div class="flex items-center gap-2">
@@ -100,38 +100,21 @@
       </div>
     </header>
 
-    <div id="tab-bar-wrap" class="sticky z-10 bg-white/90 backdrop-blur border-b border-zinc-200" style="top:57px">
-      <div class="max-w-[1400px] mx-auto px-4">
-        <!-- ===================== TAB-LEISTE ===================== -->
-        <div id="tab-bar" class="flex gap-1">
-          <button data-tab="alle" class="tab-btn px-5 min-h-[44px] text-sm font-medium border-b-2 border-transparent text-zinc-500 hover:text-zinc-900 -mb-px">Alle</button>
-          <button data-tab="hotels" class="tab-btn px-5 min-h-[44px] text-sm font-medium border-b-2 border-zinc-900 text-zinc-900 -mb-px">Hotels</button>
-          <button data-tab="gruppen" class="tab-btn px-5 min-h-[44px] text-sm font-medium border-b-2 border-transparent text-zinc-500 hover:text-zinc-900 -mb-px">Gruppen</button>
-        </div>
-      </div>
-    </div>
-
     <main class="max-w-[1400px] mx-auto px-4 py-4">
-      <!-- ===================== HOTELS-PANEL (Alle + Hotels) ===================== -->
-      <div id="hotels-panel">
       <div class="flex flex-wrap items-center gap-2 mb-3">
-        <input id="search" type="search" placeholder="Suche: Hotel, Ort, Gruppe, E-Mail…"
+        <input id="search" type="search" placeholder="Suche: Marke, Gruppe, Kontakt, E-Mail…"
           class="flex-1 min-w-0 w-full sm:w-auto sm:min-w-[200px] px-3 py-2 rounded-lg border border-zinc-200 bg-white focus:outline-none focus:ring-2 focus:ring-zinc-900/10" />
-        <select id="filter-status" class="px-3 py-2 rounded-lg border border-zinc-200 bg-white text-zinc-700"></select>
-        <select id="filter-land" class="px-3 py-2 rounded-lg border border-zinc-200 bg-white text-zinc-700"></select>
-        <select id="filter-gruppe" class="px-3 py-2 rounded-lg border border-zinc-200 bg-white text-zinc-700"></select>
-        <select id="group-by" class="px-3 py-2 rounded-lg border border-zinc-200 bg-white text-zinc-700">
-          <option value="">Gruppierung: keine</option>
-          <option value="land">nach Land</option>
-          <option value="region">nach Region</option>
-          <option value="gruppe">nach Gruppe</option>
-          <option value="status">nach Status</option>
+        <select id="filter-richtung" class="px-3 py-2 rounded-lg border border-zinc-200 bg-white text-zinc-700">
+          <option value="">Alle Richtungen</option>
+          <option value="outbound">Wir schreiben (outbound)</option>
+          <option value="inbound">Marke fragt an (inbound)</option>
         </select>
+        <select id="filter-status" class="px-3 py-2 rounded-lg border border-zinc-200 bg-white text-zinc-700"></select>
+        <select id="filter-uebergruppe" class="px-3 py-2 rounded-lg border border-zinc-200 bg-white text-zinc-700"></select>
+        <select id="filter-modell" class="px-3 py-2 rounded-lg border border-zinc-200 bg-white text-zinc-700"></select>
+        <button id="add-btn" class="px-3 py-2 rounded-lg bg-zinc-900 text-white font-medium hover:bg-zinc-800 transition-colors whitespace-nowrap">+ Neue Kooperation</button>
         <button id="export-btn" class="px-3 py-2 rounded-lg border border-zinc-200 bg-white hover:bg-zinc-50 transition-colors whitespace-nowrap">CSV Export</button>
       </div>
-
-      <!-- Quick-Filter (Schnellzugriffe) -->
-      <div id="quick-chips" class="flex flex-wrap gap-2 mb-3"></div>
 
       <div id="status-summary" class="flex flex-wrap gap-2 mb-3"></div>
 
@@ -145,87 +128,113 @@
           <table class="w-full text-left border-collapse">
             <thead class="text-xs text-zinc-500 border-b border-zinc-200">
               <tr>
-                <th data-sort="hotelname" class="px-3 py-2.5 font-medium cursor-pointer hover:text-zinc-900 select-none">Hotel</th>
-                <th data-sort="land" class="px-3 py-2.5 font-medium cursor-pointer hover:text-zinc-900 select-none">Land</th>
-                <th data-sort="region" class="px-3 py-2.5 font-medium cursor-pointer hover:text-zinc-900 select-none hidden md:table-cell">Region</th>
+                <th data-sort="marke" class="px-3 py-2.5 font-medium cursor-pointer hover:text-zinc-900 select-none">Marke</th>
+                <th data-sort="richtung" class="px-3 py-2.5 font-medium cursor-pointer hover:text-zinc-900 select-none">Richtung</th>
+                <th data-sort="uebergruppe" class="px-3 py-2.5 font-medium cursor-pointer hover:text-zinc-900 select-none hidden md:table-cell">Gruppe</th>
                 <th data-sort="status" class="px-3 py-2.5 font-medium cursor-pointer hover:text-zinc-900 select-none">Status</th>
+                <th data-sort="modell" class="px-3 py-2.5 font-medium cursor-pointer hover:text-zinc-900 select-none hidden md:table-cell">Modell</th>
                 <th data-sort="angefragt_am" class="px-3 py-2.5 font-medium cursor-pointer hover:text-zinc-900 select-none">Angefragt</th>
-                <th class="px-3 py-2.5 font-medium hidden md:table-cell">Bemerkung</th>
+                <th class="px-3 py-2.5 font-medium hidden lg:table-cell">Bemerkung</th>
                 <th class="px-3 py-2.5 font-medium">Kontakt</th>
+                <th class="px-3 py-2.5 font-medium"></th>
               </tr>
             </thead>
-            <tbody id="hotels-body" class="divide-y divide-zinc-100"></tbody>
+            <tbody id="koop-body" class="divide-y divide-zinc-100"></tbody>
           </table>
         </div>
-        <div id="empty-state" class="hidden p-8 text-center text-zinc-400 text-sm">Keine Treffer.</div>
-      </div>
-      </div><!-- /hotels-panel -->
-
-      <!-- ===================== GRUPPEN-PANEL ===================== -->
-      <div id="gruppen-panel" class="hidden">
-        <div id="gruppen-body"></div>
+        <div id="empty-state" class="hidden p-8 text-center text-zinc-400 text-sm">Noch keine Kooperationen — lege mit „+ Neue Kooperation“ die erste an.</div>
       </div>
     </main>
   </div>
 
-  <!-- ===================== E-MAIL MODAL ===================== -->
-  <div id="email-modal" class="hidden fixed inset-0 z-40 bg-black/30 flex items-center justify-center px-4">
+  <!-- ===================== ADD/EDIT MODAL ===================== -->
+  <div id="edit-modal" class="hidden fixed inset-0 z-40 bg-black/30 flex items-center justify-center px-4">
     <div class="w-full max-w-2xl bg-white border border-zinc-200 rounded-xl card-shadow p-5 fade-in max-h-[90vh] overflow-auto">
-      <div class="flex items-start justify-between mb-3">
-        <div>
-          <h2 class="text-lg font-semibold" id="modal-hotel-name">Hotel</h2>
-          <p class="text-xs text-zinc-500" id="modal-hotel-meta"></p>
-        </div>
-        <button id="modal-close" class="text-zinc-400 hover:text-zinc-900 text-xl leading-none">&times;</button>
+      <div class="flex items-start justify-between mb-4">
+        <h2 class="text-lg font-semibold" id="edit-title">Neue Kooperation</h2>
+        <button id="edit-close" class="text-zinc-400 hover:text-zinc-900 text-xl leading-none">&times;</button>
       </div>
 
-      <div id="modal-warning" class="space-y-2 mb-3 hidden"></div>
-
-      <div class="space-y-3">
+      <form id="edit-form" class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div class="sm:col-span-2">
+          <label class="block text-xs text-zinc-500 mb-1">Marke *</label>
+          <input id="f-marke" required class="w-full px-3 py-2 rounded-lg border border-zinc-200 focus:outline-none focus:ring-2 focus:ring-zinc-900/10" />
+        </div>
         <div>
-          <label class="block text-xs text-zinc-500 mb-1">Empfänger</label>
-          <div class="flex gap-2">
-            <input id="modal-recipient" class="flex-1 px-3 py-2 rounded-lg border border-zinc-200 font-mono text-xs" readonly />
-            <button data-copy="modal-recipient" class="copy-btn px-3 py-2 rounded-lg border border-zinc-200 hover:bg-zinc-50 text-xs whitespace-nowrap">Kopieren</button>
-          </div>
+          <label class="block text-xs text-zinc-500 mb-1">Richtung</label>
+          <select id="f-richtung" class="w-full px-3 py-2 rounded-lg border border-zinc-200 bg-white">
+            <option value="outbound">Wir schreiben (outbound)</option>
+            <option value="inbound">Marke fragt an (inbound)</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs text-zinc-500 mb-1">Status</label>
+          <select id="f-status" class="w-full px-3 py-2 rounded-lg border border-zinc-200 bg-white"></select>
+        </div>
+        <div>
+          <label class="block text-xs text-zinc-500 mb-1">Übergruppe</label>
+          <input id="f-uebergruppe" list="dl-uebergruppe" placeholder="z.B. Kosmetik, Auto…" class="w-full px-3 py-2 rounded-lg border border-zinc-200 focus:outline-none focus:ring-2 focus:ring-zinc-900/10" />
+          <datalist id="dl-uebergruppe"></datalist>
+        </div>
+        <div>
+          <label class="block text-xs text-zinc-500 mb-1">Untergruppe</label>
+          <input id="f-untergruppe" list="dl-untergruppe" placeholder="z.B. Makeup, Haarpflege…" class="w-full px-3 py-2 rounded-lg border border-zinc-200 focus:outline-none focus:ring-2 focus:ring-zinc-900/10" />
+          <datalist id="dl-untergruppe"></datalist>
+        </div>
+        <div>
+          <label class="block text-xs text-zinc-500 mb-1">Land / Region</label>
+          <input id="f-land" list="dl-land" placeholder="z.B. DE, AT, US…" class="w-full px-3 py-2 rounded-lg border border-zinc-200 focus:outline-none focus:ring-2 focus:ring-zinc-900/10" />
+          <datalist id="dl-land"></datalist>
+        </div>
+        <div>
+          <label class="block text-xs text-zinc-500 mb-1">Modell</label>
+          <select id="f-modell" class="w-full px-3 py-2 rounded-lg border border-zinc-200 bg-white"></select>
+        </div>
+        <div>
+          <label class="block text-xs text-zinc-500 mb-1">Honorar / Gegenwert</label>
+          <input id="f-honorar" placeholder="z.B. 500 EUR + Produkte" class="w-full px-3 py-2 rounded-lg border border-zinc-200 focus:outline-none focus:ring-2 focus:ring-zinc-900/10" />
+        </div>
+        <div>
+          <label class="block text-xs text-zinc-500 mb-1">Angefragt am</label>
+          <input id="f-angefragt" type="date" class="w-full px-3 py-2 rounded-lg border border-zinc-200 focus:outline-none focus:ring-2 focus:ring-zinc-900/10" />
+        </div>
+        <div>
+          <label class="block text-xs text-zinc-500 mb-1">Instagram</label>
+          <input id="f-instagram" placeholder="@marke" class="w-full px-3 py-2 rounded-lg border border-zinc-200 focus:outline-none focus:ring-2 focus:ring-zinc-900/10" />
+        </div>
+        <div>
+          <label class="block text-xs text-zinc-500 mb-1">Kontakt (Person)</label>
+          <input id="f-kontakt" placeholder="Ansprechperson" class="w-full px-3 py-2 rounded-lg border border-zinc-200 focus:outline-none focus:ring-2 focus:ring-zinc-900/10" />
+        </div>
+        <div class="sm:col-span-2">
+          <label class="block text-xs text-zinc-500 mb-1">E-Mail</label>
+          <input id="f-email" type="email" placeholder="pr@marke.com" class="w-full px-3 py-2 rounded-lg border border-zinc-200 font-mono text-xs focus:outline-none focus:ring-2 focus:ring-zinc-900/10" />
+        </div>
+        <div class="sm:col-span-2">
+          <label class="block text-xs text-zinc-500 mb-1">Bemerkung <span class="text-zinc-400">(mit „·“ trennen für Pills)</span></label>
+          <textarea id="f-bemerkung" rows="2" placeholder="Zusage · wartet auf Produkt" class="w-full px-3 py-2 rounded-lg border border-zinc-200 text-sm focus:outline-none focus:ring-2 focus:ring-zinc-900/10 resize-none"></textarea>
         </div>
 
-        <div>
-          <label class="block text-xs text-zinc-500 mb-1">Vorlage</label>
-          <select id="modal-template" class="w-full px-3 py-2 rounded-lg border border-zinc-200 bg-white"></select>
-        </div>
+        <p id="edit-error" class="hidden sm:col-span-2 text-xs text-red-600"></p>
 
-        <div>
-          <label class="block text-xs text-zinc-500 mb-1">Betreff</label>
-          <div class="flex gap-2">
-            <input id="modal-subject" class="flex-1 px-3 py-2 rounded-lg border border-zinc-200" />
-            <button data-copy="modal-subject" class="copy-btn px-3 py-2 rounded-lg border border-zinc-200 hover:bg-zinc-50 text-xs whitespace-nowrap">Kopieren</button>
-          </div>
-        </div>
-
-        <div>
-          <label class="block text-xs text-zinc-500 mb-1">Text</label>
-          <textarea id="modal-body" rows="12" class="w-full px-3 py-2 rounded-lg border border-zinc-200 font-mono text-xs leading-relaxed"></textarea>
-        </div>
-
-        <div class="flex items-center justify-between gap-2 pt-1">
-          <span id="modal-copied" class="text-green-600 text-xs hidden">Kopiert ✓</span>
+        <div class="sm:col-span-2 flex items-center justify-between gap-2 pt-1">
+          <button type="button" id="delete-btn" class="hidden text-xs text-red-600 hover:text-red-700 px-3 py-2 rounded-lg border border-red-200 hover:bg-red-50">Löschen</button>
           <div class="flex gap-2 ml-auto">
-            <button data-copy="modal-body" class="copy-btn px-4 py-2 rounded-lg bg-zinc-900 text-white text-sm font-medium hover:bg-zinc-800 transition-colors">Text kopieren</button>
+            <button type="button" id="edit-cancel" class="px-4 py-2 rounded-lg border border-zinc-200 text-sm hover:bg-zinc-50">Abbrechen</button>
+            <button type="submit" id="save-btn" class="px-4 py-2 rounded-lg bg-zinc-900 text-white text-sm font-medium hover:bg-zinc-800 transition-colors">Speichern</button>
           </div>
         </div>
-      </div>
+      </form>
     </div>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
   <!-- ===================== FEEDBACK-MODAL ===================== -->
-  <!-- Mobile: fixed inset-0, overflow-y-auto, padding-bottom 120px damit Tastatur den Speichern-Button nicht verdeckt -->
   <div id="feedback-modal" class="hidden fixed inset-0 z-50 overflow-y-auto">
     <div id="feedback-overlay" class="fixed inset-0 bg-black/25"></div>
     <div class="relative min-h-full flex items-end sm:items-center justify-center px-4 pb-0 sm:pb-8">
-      <div class="relative w-full max-w-sm bg-white border border-zinc-200 rounded-t-xl sm:rounded-xl card-shadow p-6 fade-in mb-0 sm:mb-0" style="padding-bottom: 32px">
+      <div class="relative w-full max-w-sm bg-white border border-zinc-200 rounded-t-xl sm:rounded-xl card-shadow p-6 fade-in" style="padding-bottom: 32px">
         <div class="flex items-center justify-between mb-4">
           <h2 class="text-base font-semibold">Feedback</h2>
           <button id="feedback-close" class="text-zinc-400 hover:text-zinc-900 text-xl leading-none">&times;</button>
@@ -250,6 +259,6 @@
     </div>
   </div>
 
-  <script src="assets/app.js?v=26" defer></script>
+  <script src="assets/app.js?v=1" defer></script>
 </body>
 </html>

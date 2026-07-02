@@ -8,19 +8,10 @@ const SUPABASE_KEY = 'sb_publishable_hsXVsENQLILd9QoeVN_hBw_nVdQpNYE';
 // `window.supabase` from the UMD library and aborts the whole script.
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-// ---- Status definitions (label + pill colors) ----
-const STATUS = {
-  offen:            { label: 'Offen',          cls: 'bg-slate-100 text-slate-700' },
-  entwurf:          { label: 'Entwurf',        cls: 'bg-teal-50 text-teal-700' },
-  angefragt:        { label: 'Angefragt',      cls: 'bg-blue-50 text-blue-700' },
-  zusage:           { label: 'Zusage',         cls: 'bg-green-50 text-green-700' },
-  wiedervorlage:    { label: 'Wiedervorlage',  cls: 'bg-orange-50 text-orange-700' },
-  warten:           { label: 'Warten',         cls: 'bg-amber-50 text-amber-700' },
-  antwort_negativ:  { label: 'Absage',         cls: 'bg-red-50 text-red-700' },
-  kooperiert:       { label: 'Partner',        cls: 'bg-violet-50 text-violet-700' },
-  ausgeschlossen:   { label: 'Ausgeschlossen', cls: 'bg-zinc-100 text-zinc-500' },
-};
-const STATUS_KEYS = Object.keys(STATUS);
+// ---- Status: aus der DB (Tabelle status_defs), NICHT hartkodiert ----
+// Wird in loadStatusDefs() vor dem ersten Render befuellt.
+let STATUS = {};
+let STATUS_KEYS = [];
 
 // ---- Status-Legende (Erklaerung je Status, fuer das aufklappbare Panel) ----
 const LEGEND = [
@@ -140,10 +131,22 @@ function showApp(user) {
   appLoaded = true;
   // Daten-Calls AUS dem onAuthStateChange-Callback herauslösen (setTimeout),
   // sonst blockiert der supabase-js Auth-Lock die Query -> leere Liste.
-  setTimeout(() => { loadHotels(); loadTemplates(); }, 0);
+  setTimeout(async () => { await loadStatusDefs(); loadHotels(); loadTemplates(); }, 0);
 }
 
 // ===================== DATA =====================
+// Status-Vokabular aus der DB laden (einzige Quelle, geteilt mit Kooperationen).
+async function loadStatusDefs() {
+  const { data, error } = await sb
+    .from('status_defs')
+    .select('*')
+    .order('sort_order', { ascending: true });
+  if (error) { console.error(error); alert('Fehler beim Laden der Status: ' + error.message); return; }
+  STATUS = {};
+  (data || []).forEach((s) => { STATUS[s.key] = { label: s.label, cls: s.cls }; });
+  STATUS_KEYS = (data || []).map((s) => s.key);
+}
+
 async function loadHotels() {
   const { data, error } = await sb
     .from('hotels')
