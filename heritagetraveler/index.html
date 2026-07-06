@@ -77,19 +77,23 @@
   <!-- ===================== APP ===================== -->
   <div id="app-view" class="hidden min-h-screen">
     <header class="border-b border-zinc-200 bg-white/80 backdrop-blur sticky top-0 z-20">
-      <div class="max-w-[1400px] mx-auto px-4 py-3 flex items-center justify-between gap-4">
-        <div class="flex items-center gap-4 min-w-0">
+      <!-- Mobil: Logo + Aktionen in Zeile 1, Umschalter in Zeile 2 (flex-wrap, gap-y).
+           Ab sm: alles inline in einer Zeile wie zuvor. -->
+      <div class="max-w-[1400px] mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+        <div class="flex items-center gap-4 min-w-0 order-1">
           <div class="flex flex-col">
             <span class="text-xs font-mono uppercase tracking-widest text-zinc-400">lifetimemiri</span>
             <span id="count-badge" class="text-xs text-zinc-400 mt-0.5"></span>
           </div>
-          <!-- ===================== BEREICHS-UMSCHALTER ===================== -->
-          <nav class="flex items-center gap-1 p-0.5 rounded-lg bg-zinc-100 border border-zinc-200 text-xs font-medium shrink-0">
-            <span class="px-3 py-1.5 rounded-md bg-white text-zinc-900 shadow-sm">Heritage</span>
-            <a href="../kooperation/" class="px-3 py-1.5 rounded-md text-zinc-500 hover:text-zinc-900 transition-colors">Kooperationen</a>
-          </nav>
         </div>
-        <div class="flex items-center gap-2">
+        <!-- ===================== BEREICHS-UMSCHALTER =====================
+             Mobil: eigene Zeile unter Logo/Aktionen (order-3, basis-full),
+             ab sm: inline direkt nach dem Logo (order-1, wie zuvor) -->
+        <nav class="flex items-center gap-1 p-0.5 rounded-lg bg-zinc-100 border border-zinc-200 text-xs font-medium shrink-0 order-3 basis-full sm:order-1 sm:basis-auto sm:mr-auto">
+          <span class="px-3 py-1.5 rounded-md bg-white text-zinc-900 shadow-sm">Heritage</span>
+          <a href="../kooperation/" class="px-3 py-1.5 rounded-md text-zinc-500 hover:text-zinc-900 transition-colors">Kooperationen</a>
+        </nav>
+        <div class="flex items-center gap-2 order-2">
           <span id="user-email" class="text-xs text-zinc-400 hidden sm:inline"></span>
           <button id="feedback-btn" class="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-zinc-200 hover:bg-zinc-50 transition-colors" style="min-height:44px">
             <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
@@ -250,6 +254,6 @@
     </div>
   </div>
 
-  <script src="assets/app.js?v=26" defer></script>
+  <script src="assets/app.js?v=27" defer></script>
 </body>
 </html>
