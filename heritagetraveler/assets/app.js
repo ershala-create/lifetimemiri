@@ -566,6 +566,10 @@ function rowHtml(h) {
           ).join('')
         : '<span class="text-zinc-300">—</span>'}
     </td>
+    <td class="px-3 py-2.5 align-top text-zinc-600 max-w-[220px] hidden lg:table-cell">
+      ${h.auswahl_grund ? `<div class="text-xs text-zinc-600">${escapeHtml(h.auswahl_grund)}</div>` : '<span class="text-zinc-300">—</span>'}
+      ${h.preis_ab ? `<div class="text-xs text-zinc-400 mt-0.5">ab ${escapeHtml(String(h.preis_ab))} ${escapeHtml(h.waehrung || 'EUR')}${h.preis_basis ? ' / ' + escapeHtml(h.preis_basis) : ''}</div>` : ''}
+    </td>
     <td class="px-3 py-2.5 align-top text-zinc-600 max-w-[220px]">
       ${conflict ? '<div class="text-amber-600 text-xs mb-0.5" title="Gleiche Ansprechperson/E-Mail wie ein bereits kontaktiertes Hotel – vor dem Anschreiben prüfen">⚠ Sammelkontakt</div>' : ''}
       ${contactName ? `<div>${escapeHtml(contactName)}</div>` : ''}
