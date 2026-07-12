@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HeritageTraveler · Hotelklassen-Test</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = { theme: { extend: { fontFamily: {
+      sans: ['Geist', 'system-ui', 'sans-serif'], mono: ['Geist Mono', 'ui-monospace', 'monospace'],
+    } } } };
+  </script>
+  <style>
+    :root { --bg:#fafafa; }
+    body { background: var(--bg); }
+    .card-shadow { box-shadow: 0 10px 30px rgba(0,0,0,.06); }
+    .tnum { font-variant-numeric: tabular-nums; }
+    @keyframes fadeIn { from { opacity:0; transform:translateY(4px);} to { opacity:1; transform:none;} }
+    .fade-in { animation: fadeIn .25s ease both; }
+  </style>
+</head>
+<body class="font-sans antialiased text-sm text-zinc-900">
+
+  <div class="max-w-4xl mx-auto px-4 sm:px-6">
+    <!-- Kopfzeile mit Bereichs-Umschalter -->
+    <header class="flex flex-wrap items-center gap-x-4 gap-y-2 py-4">
+      <div class="flex items-center gap-2 order-1">
+        <span class="text-xs font-mono uppercase tracking-widest text-zinc-400">lifetimemiri</span>
+      </div>
+      <nav class="flex items-center gap-1 p-0.5 rounded-lg bg-zinc-100 border border-zinc-200 text-xs font-medium shrink-0 order-3 basis-full sm:order-2 sm:basis-auto sm:mr-auto">
+        <a href="index.html" class="px-3 py-1.5 rounded-md text-zinc-500 hover:text-zinc-900 transition-colors">Heritage</a>
+        <a href="../kooperation/" class="px-3 py-1.5 rounded-md text-zinc-500 hover:text-zinc-900 transition-colors">Kooperationen</a>
+        <span class="px-3 py-1.5 rounded-md bg-white text-zinc-900 shadow-sm">Hotelklassen-Test</span>
+      </nav>
+    </header>
+
+    <!-- Intro -->
+    <div class="mb-5">
+      <h1 class="text-xl font-semibold tracking-tight">Hotelklassen-Test</h1>
+      <p class="text-zinc-500 mt-1 max-w-2xl">Neu recherchierte Häuser, ausgewählt über <b class="text-zinc-700 font-medium">Charakter, Kuratierung und Ikonik statt Sterne</b>. Pro Region wird der Preis-Schnitt berechnet: <span class="text-emerald-700 font-medium">grün = über dem Schnitt</span> (oberes Segment, Anschreib-Priorität), grau = darunter (bewusst wählbar). Klick auf einen Namen öffnet die Suche zum Prüfen. Feedback bitte im Haupt-Tool über den Feedback-Button.</p>
+    </div>
+
+    <!-- Stats -->
+    <div id="stats" class="flex flex-wrap gap-2 mb-4"></div>
+
+    <!-- Toolbar -->
+    <div class="flex items-center gap-3 mb-5 flex-wrap">
+      <label class="inline-flex items-center gap-2 cursor-pointer select-none text-xs text-zinc-600 bg-white border border-zinc-200 px-3 py-1.5 rounded-full">
+        <input type="checkbox" id="onlyTop" class="accent-emerald-600 w-4 h-4"> Nur über dem Schnitt
+      </label>
+      <span class="text-xs text-zinc-400 inline-flex gap-3 flex-wrap">
+        <span><span class="text-emerald-600 font-semibold">▲</span> über Schnitt</span>
+        <span>▽ unter Schnitt</span>
+        <span class="text-amber-600">E-Mail offen</span>
+      </span>
+    </div>
+
+    <!-- Liste / Zustände -->
+    <div id="notice" class="hidden bg-white border border-zinc-200 rounded-xl card-shadow p-6 text-center text-zinc-500 fade-in"></div>
+    <div id="list" class="pb-16 space-y-3"></div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script>
+    const SUPABASE_URL = 'https://lepvxvjvaxnytxrgcpxx.supabase.co';
+    const SUPABASE_KEY = 'sb_publishable_hsXVsENQLILd9QoeVN_hBw_nVdQpNYE';
+    const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    const $ = (id) => document.getElementById(id);
+    const esc = (s) => (s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+    const fmt = (n) => n == null ? null : Number(n).toLocaleString('de-CH');
+
+    function showNotice(msg) {
+      const n = $('notice');
+      n.innerHTML = msg;
+      n.classList.remove('hidden');
+    }
+
+    async function load() {
+      const { data, error } = await sb
+        .from('hotels')
+        .select('hotelname,ort,region,land,preis_ab,email_1,auswahl_grund')
+        .not('auswahl_grund', 'is', null);
+
+      if (error) {
+        showNotice('Konnte die Daten nicht laden. Bitte zuerst im <a class="underline" href="index.html">Haupt-Tool</a> anmelden, dann diese Seite neu laden.');
+        return;
+      }
+      if (!data || !data.length) {
+        showNotice('Noch keine Häuser mit Auswahl-Begründung vorhanden. Bitte im <a class="underline" href="index.html">Haupt-Tool</a> anmelden und neu laden.');
+        return;
+      }
+
+      // nach Region gruppieren
+      const byRegion = {};
+      for (const h of data) {
+        const r = h.region || 'Ohne Region';
+        (byRegion[r] ||= []).push(h);
+      }
+
+      // Schnitt je Region + sortieren
+      const regions = Object.keys(byRegion).map(r => {
+        const houses = byRegion[r];
+        const prices = houses.map(h => h.preis_ab).filter(p => p != null).map(Number);
+        const avg = prices.length ? Math.round(prices.reduce((a, b) => a + b, 0) / prices.length) : null;
+        houses.sort((a, b) => (b.preis_ab ?? -1) - (a.preis_ab ?? -1));
+        return { r, houses, avg, single: houses.length === 1 };
+      });
+      // Regionen: nach Schnitt absteigend, Einzelstandorte ans Ende
+      regions.sort((a, b) => (b.avg ?? -1) - (a.avg ?? -1));
+
+      let total = 0, tops = 0, mails = 0;
+      const list = $('list');
+      list.innerHTML = '';
+
+      for (const reg of regions) {
+        const rowsHtml = reg.houses.map(h => {
+          const top = h.preis_ab != null && reg.avg != null ? Number(h.preis_ab) >= reg.avg : (reg.single ? true : false);
+          total++; if (top) tops++; if (!h.email_1) mails++;
+          const q = encodeURIComponent((h.hotelname + ' ' + (h.ort || '')).trim());
+          return `<div class="grid grid-cols-[70px_1fr_auto] gap-3 px-4 py-3 border-t border-zinc-100 ${top ? 'bg-emerald-50/60' : ''}" data-top="${top ? 1 : 0}">
+            <div class="tnum font-semibold text-right ${top ? 'text-emerald-700' : 'text-zinc-700'}">${h.preis_ab == null ? '<span class="text-zinc-300 font-medium">—</span>' : fmt(h.preis_ab) + '<span class="text-zinc-400 text-xs font-medium">&nbsp;€</span>'}</div>
+            <div>
+              <div class="flex items-center gap-2 flex-wrap">
+                <a href="https://www.google.com/search?q=${q}" target="_blank" rel="noopener" class="font-semibold text-zinc-900 hover:underline underline-offset-2">${esc(h.hotelname)}</a>
+                ${top ? '<span class="text-[10px] font-semibold text-emerald-700 border border-emerald-200 rounded-full px-2 py-0.5">▲ über Schnitt</span>' : ''}
+              </div>
+              <div class="text-xs text-zinc-400 mt-0.5">${esc(h.ort || h.land || '')}</div>
+              <div class="text-zinc-500 text-[12.5px] mt-1 max-w-xl">${esc(h.auswahl_grund || '')}</div>
+            </div>
+            <div class="justify-self-end">${h.email_1 ? '' : '<span class="text-[10px] font-medium text-amber-700 bg-amber-50 rounded-full px-2 py-0.5 whitespace-nowrap">E-Mail offen</span>'}</div>
+          </div>`;
+        }).join('');
+
+        const avgLabel = reg.avg != null
+          ? `Ø <b class="text-zinc-700">${reg.avg} €</b> · ${reg.houses.length} Häuser`
+          : `${reg.houses.length} Häuser`;
+
+        list.insertAdjacentHTML('beforeend',
+          `<details open class="bg-white border border-zinc-200 rounded-xl card-shadow overflow-hidden fade-in">
+             <summary class="cursor-pointer list-none px-4 py-3 flex items-baseline justify-between gap-3">
+               <h2 class="text-[15px] font-semibold tracking-tight">${esc(reg.r)}</h2>
+               <span class="text-xs text-zinc-500 tnum whitespace-nowrap">${avgLabel}</span>
+             </summary>
+             <div>${rowsHtml}</div>
+           </details>`);
+      }
+
+      $('stats').innerHTML = [
+        ['neue Häuser', total, 'text-zinc-900'],
+        ['Regionen', regions.length, 'text-zinc-900'],
+        ['über dem Schnitt', tops, 'text-emerald-700'],
+        ['E-Mail offen', mails, 'text-amber-700'],
+      ].map(([l, n, c]) =>
+        `<div class="bg-white border border-zinc-200 rounded-xl card-shadow px-4 py-3 min-w-[92px]">
+           <div class="text-xl font-semibold tnum ${c}">${n}</div>
+           <div class="text-[11px] text-zinc-500">${l}</div>
+         </div>`).join('');
+
+      $('onlyTop').addEventListener('change', (e) => {
+        const on = e.target.checked;
+        document.querySelectorAll('[data-top]').forEach(r =>
+          r.classList.toggle('hidden', on && r.dataset.top !== '1'));
+      });
+    }
+
+    load();
+  </script>
+</body>
+</html>
