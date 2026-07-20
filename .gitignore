@@ -4,3 +4,6 @@
 node_modules/
 .DS_Store
 *.log
+
+# Lokale Entwicklungs-Konfiguration, gehoert nicht ins oeffentliche Repo
+.claude/

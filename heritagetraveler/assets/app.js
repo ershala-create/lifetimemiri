@@ -781,7 +781,9 @@ function debounce(fn, ms) {
     submitBtn.disabled = true;
     submitBtn.textContent = 'Speichern…';
     // Spalte heisst "message" (nicht "text") — DB-Schema-korrekter Insert
-    const { error } = await sb.from('feedback').insert({ message: text });
+    // project: drei Apps teilen sich diese Tabelle (Fitness, HeritageTraveler,
+    // Kooperation). Ohne Herkunft ist ein Eintrag hinterher nicht zuzuordnen.
+    const { error } = await sb.from('feedback').insert({ message: text, project: 'heritagetraveler' });
     if (error) {
       console.error('Feedback-Fehler:', error);
       errEl.textContent = 'Fehler beim Speichern: ' + error.message;

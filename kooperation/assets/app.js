@@ -504,7 +504,9 @@ function debounce(fn, ms) {
     errEl.classList.add('hidden');
     submitBtn.disabled = true;
     submitBtn.textContent = 'Speichern…';
-    const { error } = await sb.from('feedback').insert({ message: text });
+    // project: drei Apps teilen sich diese Tabelle (Fitness, HeritageTraveler,
+    // Kooperation). Ohne Herkunft ist ein Eintrag hinterher nicht zuzuordnen.
+    const { error } = await sb.from('feedback').insert({ message: text, project: 'kooperation' });
     if (error) {
       console.error('Feedback-Fehler:', error);
       errEl.textContent = 'Fehler beim Speichern: ' + error.message;
