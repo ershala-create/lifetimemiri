@@ -133,9 +133,16 @@ async function loadStatusDefs() {
     .select('*')
     .order('sort_order', { ascending: true });
   if (error) { console.error(error); alert('Fehler beim Laden der Status: ' + error.message); return; }
+  // status_defs values are written into HTML (text, attributes, class lists) in many places:
+  // keep only harmless characters once, here at the source
+  const defs = (data || []).map((s) => ({
+    key: String(s.key).replace(/[^A-Za-z0-9_-]/g, ''),
+    label: String(s.label).replace(/[<>"'&`]/g, ''),
+    cls: String(s.cls).replace(/[^A-Za-z0-9 _:/.[\]#%-]/g, ''),
+  }));
   STATUS = {};
-  (data || []).forEach((s) => { STATUS[s.key] = { label: s.label, cls: s.cls }; });
-  STATUS_KEYS = (data || []).map((s) => s.key);
+  defs.forEach((s) => { STATUS[s.key] = { label: s.label, cls: s.cls }; });
+  STATUS_KEYS = defs.map((s) => s.key);
 }
 
 async function loadKoops() {

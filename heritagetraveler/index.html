@@ -31,6 +31,20 @@
     .card-shadow { box-shadow: 0 10px 30px rgba(0,0,0,.06); }
     @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
     .fade-in { animation: fadeIn .25s ease both; }
+    /* Reiter Antworten: sanfter Hover-Lift und Einblenden beim Scrollen (aus bei reduzierter Bewegung) */
+    .lift { transition: transform .2s cubic-bezier(.23,1,.32,1), box-shadow .2s ease; }
+    .lift:hover { transform: translateY(-2px); box-shadow: 0 14px 34px rgba(0,0,0,.09); }
+    .lift:active { transform: scale(.98); }
+    .rv { opacity: 0; transform: translateY(6px); transition: opacity .35s cubic-bezier(.23,1,.32,1), transform .35s cubic-bezier(.23,1,.32,1); }
+    .rv.rv-in { opacity: 1; transform: none; }
+    @media (prefers-reduced-motion: reduce) {
+      .lift, .rv { transition: none; }
+      .lift:hover, .lift:active { transform: none; }
+      .rv { opacity: 1; transform: none; }
+      .fade-in { animation: none; }
+    }
+    /* Reiter bleiben einzeilig, auf sehr schmalen Handys scrollt die Leiste statt die Seite */
+    .tab-btn { flex-shrink: 0; white-space: nowrap; }
     .tbl-wrap::-webkit-scrollbar { height: 8px; width: 8px; }
     .tbl-wrap::-webkit-scrollbar-thumb { background: #d4d4d8; border-radius: 9999px; }
     thead th { position: sticky; top: 0; background: #fff; z-index: 1; }
@@ -113,10 +127,12 @@
     <div id="tab-bar-wrap" class="sticky z-10 bg-white/90 backdrop-blur border-b border-zinc-200" style="top:57px">
       <div class="max-w-[1400px] mx-auto px-4">
         <!-- ===================== TAB-LEISTE ===================== -->
-        <div id="tab-bar" class="flex gap-1">
-          <button data-tab="alle" class="tab-btn px-5 min-h-[44px] text-sm font-medium border-b-2 border-transparent text-zinc-500 hover:text-zinc-900 -mb-px">Alle</button>
-          <button data-tab="hotels" class="tab-btn px-5 min-h-[44px] text-sm font-medium border-b-2 border-zinc-900 text-zinc-900 -mb-px">Hotels</button>
-          <button data-tab="gruppen" class="tab-btn px-5 min-h-[44px] text-sm font-medium border-b-2 border-transparent text-zinc-500 hover:text-zinc-900 -mb-px">Gruppen</button>
+        <div id="tab-bar" class="flex gap-1 overflow-x-auto pb-px">
+          <button data-tab="alle" class="tab-btn px-2 sm:px-5 min-h-[44px] text-sm font-medium border-b-2 border-transparent text-zinc-500 hover:text-zinc-900 -mb-px">Alle</button>
+          <button data-tab="hotels" class="tab-btn px-2 sm:px-5 min-h-[44px] text-sm font-medium border-b-2 border-zinc-900 text-zinc-900 -mb-px">Hotels</button>
+          <button data-tab="gruppen" class="tab-btn px-2 sm:px-5 min-h-[44px] text-sm font-medium border-b-2 border-transparent text-zinc-500 hover:text-zinc-900 -mb-px">Gruppen</button>
+          <button data-tab="antworten" class="tab-btn px-2 sm:px-5 min-h-[44px] text-sm font-medium border-b-2 border-transparent text-zinc-500 hover:text-zinc-900 -mb-px">Antworten</button>
+          <button data-tab="termine" class="tab-btn px-2 sm:px-5 min-h-[44px] text-sm font-medium border-b-2 border-transparent text-zinc-500 hover:text-zinc-900 -mb-px">Termine</button>
         </div>
       </div>
     </div>
@@ -182,6 +198,16 @@
       <!-- ===================== GRUPPEN-PANEL ===================== -->
       <div id="gruppen-panel" class="hidden">
         <div id="gruppen-body"></div>
+      </div>
+
+      <!-- ===================== ANTWORTEN-PANEL ===================== -->
+      <div id="antworten-panel" class="hidden">
+        <div id="antworten-body"></div>
+      </div>
+
+      <!-- ===================== TERMINE-PANEL ===================== -->
+      <div id="termine-panel" class="hidden">
+        <div id="termine-body"></div>
       </div>
     </main>
   </div>
@@ -268,6 +294,7 @@
     </div>
   </div>
 
-  <script src="assets/app.js?v=29" defer></script>
+  <script src="assets/termine.js?v=2" defer></script>
+  <script src="assets/app.js?v=31" defer></script>
 </body>
 </html>

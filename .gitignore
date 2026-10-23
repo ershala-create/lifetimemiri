@@ -7,3 +7,7 @@ node_modules/
 
 # Lokale Entwicklungs-Konfiguration, gehoert nicht ins oeffentliche Repo
 .claude/
+
+# Temporaere Testseiten und Daten-Exporte (enthalten Hoteldaten), nie veroeffentlichen
+_termine_test*
+*_data.json
