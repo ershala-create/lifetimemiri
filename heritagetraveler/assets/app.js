@@ -209,7 +209,7 @@ function renderTermine() {
   const hinweis = termineData.fehler ? 'Schulferien, Zusatztermine oder To-dos konnten nicht geladen werden, die Ansicht ist unvollständig.' : '';
   const model = TerminePlan.render(body, { hotels: allHotels, plan: termineData.plan, ferien: termineData.ferien, todos: termineData.todos, status: STATUS, today: isoToday(), hinweis });
   const c = model.counts;
-  $('count-badge').textContent = `${c.gruen} fix · ${c.gelb} in Verhandlung${c.rot ? ` · ${c.rot} Achtung` : ''}`;
+  $('count-badge').textContent = `${c.fix} fix · ${c.verhandlung} in Verhandlung${c.rot ? ` · ${c.rot} Achtung` : ''}`;
 }
 
 async function loadTemplates() {

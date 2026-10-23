@@ -26,8 +26,18 @@ const TerminePlan = (() => {
   const BALL = { miri: 'Miri ist am Zug', hotel: 'Hotel ist am Zug' };
   const TODO_DOT = { rot: 'bg-red-500', gelb: 'bg-amber-400', gruen: 'bg-green-500' };
   const TODO_ORDER = { rot: 0, gelb: 1, gruen: 2 };
+  // Streifen unter dem Tag im Kalender: bleibt sichtbar, auch wenn der Tag durch einen Termin eingefärbt ist
+  const FERIEN_STRIP = { ferien: 'bg-zinc-500', schulfrei: 'bg-zinc-300' };
+  // Listen hinter den Chips der Legende
+  const LIST_HEAD = {
+    fix: { title: 'Fix', sub: 'Alle fixierten Kooperationen. Ab heute in voller Farbe, bereits Durchgeführtes ausgegraut.' },
+    verhandlung: { title: 'In Verhandlung', sub: 'Alle Häuser mit Zusage, deren Termin noch nicht fix ist.' },
+    achtung: { title: 'Achtung', sub: 'Hier muss Miri bald handeln oder ein Termin überschneidet sich mit einem fixen Termin.' },
+    fenster: { title: 'Angebotene Fenster', sub: 'Zeitfenster, die wir den Häusern vorgeschlagen haben oder die sie angeboten haben.' },
+    ferien: { title: 'Schulferien und Feiertage', sub: 'Ab heute.' },
+  };
 
-  let state = { model: null, status: {}, lastFocus: null };
+  let state = { model: null, status: {}, lastFocus: null, current: null };
 
   // ---------- Helfer ----------
   const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -49,6 +59,14 @@ const TerminePlan = (() => {
     if (!bis || bis === von) return fmtDM(von);
     return von.slice(0, 7) === bis.slice(0, 7) ? `${von.slice(8, 10)}.–${bis.slice(8, 10)}.` : `${fmtDM(von)}–${fmtDM(bis)}`;
   }
+  // Datum fuer Listen: "27.–29.11.2026", "31.10.–02.11.2026", "30.12.2026–02.01.2027", ein Tag "04.11.2026"
+  function fmtList(von, bis) {
+    if (!bis || bis === von) return fmtDMY(von);
+    if (von.slice(0, 4) !== bis.slice(0, 4)) return `${fmtDMY(von)}–${fmtDMY(bis)}`;
+    return von.slice(0, 7) === bis.slice(0, 7) ? `${von.slice(8, 10)}.–${fmtDMY(bis)}` : `${fmtDM(von)}–${fmtDMY(bis)}`;
+  }
+  // Bundesland, sonst Land (beides aus der DB)
+  const bl = (h) => h.bundesland || h.land || '';
   const nightsText = (von, bis) => {
     const n = diffDays(von, bis || von);
     return n <= 0 ? 'Tagestermin' : `${n} ${n === 1 ? 'Nacht' : 'Nächte'}`;
@@ -176,17 +194,42 @@ const TerminePlan = (() => {
       .sort((a, b) => (a.ball_bei === 'miri' ? 0 : 1) - (b.ball_bei === 'miri' ? 0 : 1) || String(a.antwort_datum || '').localeCompare(String(b.antwort_datum || '')));
 
     const stays = items.filter((i) => i.hotel && (i.art === 'fix' || i.art === 'verhandlung'));
-    const hotelAmpel = new Map();
-    stays.forEach((i) => { const cur = hotelAmpel.get(i.hotel.id); if (!cur || PRIO[i.ampel] > PRIO[cur]) hotelAmpel.set(i.hotel.id, i.ampel); });
-    const countOf = (a) => [...hotelAmpel.values()].filter((x) => x === a).length;
+    const windows = (hotelId) => items.filter((i) => i.art === 'angebot' && i.hotel && i.hotel.id === hotelId);
+
+    // ---- Listen hinter den Chips der Legende ----
+    const byVon = (a, b) => (a.von || '9999') < (b.von || '9999') ? -1 : (a.von || '9999') > (b.von || '9999') ? 1 : 0;
+    // Fix: alle Kooperationen mit Status kooperiert (auch vergangene) plus kuenftige fixe Termine anderer Haeuser
+    const fixRows = hotels.filter((h) => h.status === 'kooperiert').map((h) => {
+      const von = isIso(h.termin_von) ? h.termin_von : null;
+      return { key: 'o:' + h.id, hotel: h, von, bis: isIso(h.termin_bis) ? h.termin_bis : von };
+    });
+    const seenFix = new Set(fixRows.map((r) => r.hotel.id));
+    items.filter((i) => i.hotel && i.art === 'fix' && !seenFix.has(i.hotel.id)).forEach((i) => fixRows.push({ key: i.key, hotel: i.hotel, von: i.von, bis: i.bis }));
+    const isFuture = (r) => !!r.bis && r.bis >= today;
+    const fixUpcoming = fixRows.filter(isFuture).sort(byVon);
+    const fixPast = fixRows.filter((r) => !isFuture(r)).sort((a, b) => String(b.von || '').localeCompare(String(a.von || '')));
+    // In Verhandlung: alle Haeuser mit Zusage, deren Termin nicht fix ist (mit eigenem Termin, mit angebotenem Fenster oder ganz ohne Datum)
+    const verhRows = hotels
+      .filter((h) => (h.status === 'zusage' || stays.some((i) => i.hotel.id === h.id && i.art === 'verhandlung')) && !stays.some((i) => i.hotel.id === h.id && i.art === 'fix'))
+      .map((h) => {
+        const own = stays.find((i) => i.hotel.id === h.id && i.art === 'verhandlung');
+        const win = own ? null : windows(h.id)[0];
+        const src = own || win;
+        return { key: own ? own.key : 'o:' + h.id, hotel: h, von: src ? src.von : null, bis: src ? src.bis : null, fenster: !own && !!win };
+      }).sort(byVon);
+    const achtungRows = stays.filter((i) => i.ampel === 'rot').map((i) => ({ key: i.key, hotel: i.hotel, von: i.von, bis: i.bis, grund: i.ampelGrund }));
+    const fensterRows = items.filter((i) => i.art === 'angebot' && i.hotel).map((i) => ({ key: i.key, hotel: i.hotel, von: i.von, bis: i.bis }));
+    const ferienRows = (ferien || []).filter((f) => isIso(f.von) && isIso(f.bis) && f.bis >= today).slice().sort(byVon);
+    const bundeslaender = [...new Set((ferien || []).map((f) => f.bundesland).filter(Boolean))];
 
     const todoList = (todos || []).filter((t) => !t.erledigt).slice().sort((a, b) =>
       (TODO_ORDER[a.prio] ?? 1) - (TODO_ORDER[b.prio] ?? 1) || String(a.frist || '9999').localeCompare(String(b.frist || '9999')));
 
     return {
-      today, items, open, months, ferien: ferien || [], ferienDay, dayMap, eventDays, todos: todoList,
-      counts: { gruen: countOf('gruen'), gelb: countOf('gelb'), rot: countOf('rot'), open: open.length },
-      windows: (hotelId) => items.filter((i) => i.art === 'angebot' && i.hotel && i.hotel.id === hotelId),
+      today, items, open, months, ferien: ferien || [], ferienDay, dayMap, eventDays, todos: todoList, bundeslaender,
+      lists: { fixUpcoming, fixPast, verhRows, achtungRows, fensterRows, ferienRows },
+      counts: { fix: fixUpcoming.length, verhandlung: verhRows.length, rot: achtungRows.length, fenster: fensterRows.length, ferien: ferienRows.length, open: open.length },
+      windows,
       byKey: new Map(items.map((i) => [i.key, i])),
       byId,
     };
@@ -221,26 +264,26 @@ const TerminePlan = (() => {
   }
   const pillHtml = (ampel, text) => `<span class="shrink-0 text-xs rounded-full px-2 py-1 ${AMPEL[ampel].pill}">${esc(text || AMPEL[ampel].label)}</span>`;
   const dotHtml = (ampel) => `<span class="mt-1 shrink-0 inline-block w-2 h-2 rounded-full ${AMPEL[ampel].dot}" aria-hidden="true"></span>`;
-  const place = (h) => [h.ort, h.land].filter(Boolean).join(', ');
+  const place = (h) => [h.ort, bl(h)].filter(Boolean).join(', ');
   const sectionHead = (title, count, note) => `<div class="flex items-baseline gap-2 mb-1">
       <h3 class="text-sm font-medium text-zinc-900">${esc(title)}</h3>
       ${count == null ? '' : `<span class="text-xs text-zinc-400 tabular-nums">${count}</span>`}
     </div>${note ? `<p class="text-xs text-zinc-500 mb-3">${esc(note)}</p>` : '<div class="mb-3"></div>'}`;
 
-  function legendHtml() {
-    const sw = (cls, txt) => `<span class="inline-flex items-center gap-2"><span class="inline-block w-3 h-3 rounded-sm ${cls}"></span>${esc(txt)}</span>`;
-    return `<div class="mb-6">
-      <div class="flex flex-wrap gap-x-4 gap-y-2 text-xs text-zinc-500">
-        ${sw(AMPEL.gruen.dot, 'Fix: Termin steht')}
-        ${sw(AMPEL.gelb.dot, 'In Verhandlung')}
-        ${sw(AMPEL.rot.dot, 'Achtung: bald handeln oder Konflikt')}
-        ${sw(AMPEL.grau.dot, 'Angebotenes Fenster')}
-      </div>
-      <div class="flex flex-wrap gap-x-4 gap-y-2 text-xs text-zinc-500 mt-2">
-        ${sw('bg-zinc-200', 'Schulferien NÖ')}
-        ${sw('bg-zinc-100', 'Feiertag, schulfrei')}
-        <span class="inline-flex items-center gap-2"><span class="inline-block w-1 h-1 rounded-full bg-zinc-900"></span>Anderer Termin (kein Hotel)</span>
-      </div>
+  // Die Chips der Legende sind Knoepfe: ein Klick oeffnet die Liste dazu (Datum, Hotel, Bundesland oder Land)
+  function legendHtml(model) {
+    const c = model.counts;
+    const chip = (key, swatch, label, count, hint) => `<button type="button" data-open="l:${key}" class="inline-flex items-center gap-2 rounded-full border border-zinc-200 bg-white px-3 text-xs text-zinc-700 hover:border-zinc-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-900/20" style="min-height:40px" title="${esc(hint)}" aria-label="${esc(label + ' (' + count + '): Liste öffnen')}">${swatch}<span>${esc(label)}</span><span class="tabular-nums text-zinc-400">${count}</span></button>`;
+    const sq = (cls) => `<span class="inline-block w-3 h-3 rounded-sm ${cls}"></span>`;
+    const strip = (cls) => `<span class="relative inline-block w-3 h-3 rounded-sm bg-zinc-100 overflow-hidden"><span class="absolute inset-x-0 bottom-0 h-1 ${cls}"></span></span>`;
+    const ferienLabel = 'Schulferien' + (model.bundeslaender.length ? ' ' + model.bundeslaender.join(' und ') : '');
+    return `<div class="mb-6 flex flex-wrap items-center gap-2">
+      ${chip('fix', sq(AMPEL.gruen.dot), 'Fix', c.fix, 'Termin steht: Liste aller fixierten Kooperationen')}
+      ${chip('verhandlung', sq(AMPEL.gelb.dot), 'In Verhandlung', c.verhandlung, 'Zusage, Termin noch nicht fix: Liste öffnen')}
+      ${chip('achtung', sq(AMPEL.rot.dot), 'Achtung', c.rot, 'Miri muss bald handeln oder Überschneidung mit einem fixen Termin')}
+      ${chip('fenster', sq(AMPEL.grau.dot), 'Angebotene Fenster', c.fenster, 'Vorgeschlagene Zeitfenster: Liste öffnen')}
+      ${chip('ferien', strip(FERIEN_STRIP.ferien) + strip(FERIEN_STRIP.schulfrei), ferienLabel, c.ferien, 'Schulferien und Feiertage ab heute: Liste öffnen')}
+      <span class="inline-flex items-center gap-2 px-1 text-xs text-zinc-500"><span class="inline-block w-1 h-1 rounded-full bg-zinc-900"></span>Anderer Termin (kein Hotel)</span>
     </div>`;
   }
 
@@ -250,7 +293,7 @@ const TerminePlan = (() => {
     const nextTxt = next ? ` · nächster Termin: ${next.titel} ${relText(next.von, next.bis, model.today)}` : '';
     return `<div class="mb-6">
       <h2 class="text-xl font-semibold">Termine</h2>
-      <p class="text-sm text-zinc-600 mt-1">${esc(`${c.gruen} fix · ${c.gelb} in Verhandlung · ${c.rot} Achtung · ${c.open} ohne Termin${nextTxt}`)}</p>
+      <p class="text-sm text-zinc-600 mt-1">${esc(`${c.fix} fix anstehend · ${c.verhandlung} in Verhandlung · ${c.rot} Achtung${nextTxt}`)}</p>
       ${hinweis ? `<p class="text-sm text-amber-700 mt-2">${esc(hinweis)}</p>` : ''}
     </div>`;
   }
@@ -289,7 +332,7 @@ const TerminePlan = (() => {
       const it = model.dayMap[iso];
       const ev = model.eventDays[iso];
       const f = model.ferienDay[iso];
-      let cls = 'relative flex items-center justify-center h-6 text-xs tabular-nums ';
+      let cls = 'relative flex items-center justify-center h-6 text-xs tabular-nums overflow-hidden ';
       if (it) {
         const left = iso === it.von || col === 0 ? ' rounded-l-md' : '';
         const right = iso === it.bis || col === 6 ? ' rounded-r-md' : '';
@@ -298,18 +341,22 @@ const TerminePlan = (() => {
       else if (f) cls += 'bg-zinc-100 text-zinc-500';
       else cls += col >= 5 ? 'text-zinc-400' : 'text-zinc-700';
       if (iso === model.today) cls += ' ring-2 ring-zinc-900 ring-inset rounded-md';
-      const dot = ev ? '<span class="absolute bottom-0 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-zinc-900"></span>' : '';
+      // Schulferien und Feiertage: Streifen am unteren Rand, auch unter eingefaerbten Tagen sichtbar; Punkt oben = anderer Termin
+      const dot = (ev ? '<span class="absolute top-0 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-zinc-900"></span>' : '')
+        + (f ? `<span class="absolute inset-x-0 bottom-0 h-1 ${f.art === 'ferien' ? FERIEN_STRIP.ferien : FERIEN_STRIP.schulfrei}"></span>` : '');
       const target = it || (ev && ev[0]);
+      const ferienTitle = f && f.name ? ' · ' + f.name : '';
       cells += target
-        ? `<button type="button" data-open="${esc(target.key)}" class="${cls}" aria-label="${esc(target.titel + ', ' + fmtDM(iso))}" title="${esc(target.titel)}">${d}${dot}</button>`
-        : `<span class="${cls}">${d}${dot}</span>`;
+        ? `<button type="button" data-open="${esc(target.key)}" class="${cls}" aria-label="${esc(target.titel + ', ' + fmtDM(iso) + ferienTitle)}" title="${esc(target.titel + ferienTitle)}">${d}${dot}</button>`
+        : `<span class="${cls}"${f ? ` title="${esc(f.name)}"` : ''}>${d}${dot}</span>`;
     }
     // multi-month items are listed once, in their main month; hotels first, other appointments separated below
     const entries = model.items.filter((i) => i.mainYM === ym);
     const lineHtml = (i) => {
       const dot = i.art === 'event' ? '<span class="mt-1 shrink-0 inline-block w-2 h-2 rounded-full bg-zinc-900" aria-hidden="true"></span>' : dotHtml(i.ampel);
       const muted = i.art === 'angebot' ? ' text-zinc-500' : ' text-zinc-900';
-      return `<button type="button" data-open="${esc(i.key)}" class="flex w-full items-start gap-2 text-left text-xs rounded-md py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-900/20">${dot}<span class="shrink-0 tabular-nums text-zinc-500">${esc(fmtShort(i.von, i.bis))}</span><span class="min-w-0 break-words${muted}">${esc(i.titel)}</span></button>`;
+      // schmale Karte: der Name rutscht als Ganzes in die naechste Zeile, statt mitten im Wort umzubrechen
+      return `<button type="button" data-open="${esc(i.key)}" class="flex w-full flex-wrap items-start gap-x-2 text-left text-xs rounded-md py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-900/20">${dot}<span class="shrink-0 tabular-nums text-zinc-500">${esc(fmtShort(i.von, i.bis))}</span><span class="min-w-[8rem] flex-1 break-words${muted}">${esc(i.titel)}</span></button>`;
     };
     const hotelLines = entries.filter((i) => i.art !== 'event').map(lineHtml).join('');
     const eventLines = entries.filter((i) => i.art === 'event').map(lineHtml).join('');
@@ -326,8 +373,9 @@ const TerminePlan = (() => {
   }
 
   function calendarHtml(model) {
+    const wo = model.bundeslaender.length ? ' in ' + model.bundeslaender.join(' und ') : '';
     return `<section class="mb-8">
-      ${sectionHead('Kalender', null, 'Farbige Tage sind Hotelkooperationen, der graue Hintergrund zeigt Schulferien und Feiertage in Niederösterreich. Tippe auf einen Tag oder Eintrag.')}
+      ${sectionHead('Kalender', null, `Farbige Tage sind Hotelkooperationen. Der Streifen unter einem Tag zeigt Schulferien (dunkel) und Feiertage (hell)${wo}. Tippe auf einen Tag, einen Eintrag oder einen Chip oben.`)}
       <div class="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4">${model.months.map((mo) => monthCal(model, mo.y, mo.m)).join('')}</div>
     </section>`;
   }
@@ -455,7 +503,62 @@ const TerminePlan = (() => {
     return `<ol class="relative ml-1 pl-5 border-l border-zinc-200">${rows}</ol>`;
   }
 
+  // ---------- Listen (Chips der Legende) ----------
+  // Zeile: Datum | Hotel (mit Zusatzzeile) | Bundesland oder Land. Mit key wird sie zum Knopf und oeffnet das Haus.
+  function listRow({ datum, datumSub, name, sub, ort, key, past }) {
+    const tag = key ? 'button' : 'div';
+    const attrs = key ? ` type="button" data-open="${esc(key)}"` : '';
+    const hover = key ? ' rounded-lg hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-900/20' : '';
+    return `<li class="${past ? 'opacity-60' : ''}"><${tag}${attrs} class="grid w-full grid-cols-[104px_1fr] sm:grid-cols-[168px_1fr_168px] gap-x-3 items-baseline text-left px-2 py-2${hover}">
+      <span class="text-xs tabular-nums text-zinc-600">${esc(datum)}${datumSub ? `<span class="block text-zinc-400">${esc(datumSub)}</span>` : ''}</span>
+      <span class="text-sm text-zinc-900">${esc(name)}${sub ? `<span class="block text-xs text-zinc-500">${esc(sub)}</span>` : ''}</span>
+      <span class="col-start-2 sm:col-start-auto text-xs text-zinc-500">${esc(ort)}</span>
+    </${tag}></li>`;
+  }
+  const groupHead = (label, n) => `<h3 class="text-xs font-medium text-zinc-500 mt-4 mb-1 px-2">${esc(label)} <span class="tabular-nums text-zinc-400">${n}</span></h3>`;
+
+  function listHtml(model, listKey) {
+    const head = LIST_HEAD[listKey];
+    if (!head) return null;
+    const L = model.lists;
+    let cols = ['Datum', 'Hotel', 'Bundesland / Land'];
+    let title = head.title;
+    let body = '';
+    const hotelRow = (r, extra) => listRow({ datum: r.von ? fmtList(r.von, r.bis) : 'Datum offen', name: r.hotel.hotelname, ort: bl(r.hotel), key: r.key, ...(extra || {}) });
+    if (listKey === 'fix') {
+      title = `Fix: ${L.fixUpcoming.length + L.fixPast.length} Kooperationen`;
+      body = (L.fixUpcoming.length ? groupHead('Ab heute', L.fixUpcoming.length) + `<ul>${L.fixUpcoming.map((r) => hotelRow(r)).join('')}</ul>` : '')
+        + (L.fixPast.length ? groupHead('Bisher', L.fixPast.length) + `<ul>${L.fixPast.map((r) => hotelRow(r, { past: true })).join('')}</ul>` : '');
+    } else if (listKey === 'verhandlung') {
+      body = `<ul>${L.verhRows.map((r) => listRow({
+        datum: r.von ? fmtList(r.von, r.bis) : 'kein Termin', datumSub: r.fenster ? 'Fenster' : '',
+        name: r.hotel.hotelname, sub: r.hotel.ball_bei && BALL[r.hotel.ball_bei] ? BALL[r.hotel.ball_bei] : '', ort: bl(r.hotel), key: r.key,
+      })).join('')}</ul>`;
+    } else if (listKey === 'achtung') {
+      body = `<ul>${L.achtungRows.map((r) => hotelRow(r, { sub: r.grund })).join('')}</ul>`;
+    } else if (listKey === 'fenster') {
+      body = `<ul>${L.fensterRows.map((r) => hotelRow(r)).join('')}</ul>`;
+    } else if (listKey === 'ferien') {
+      cols = ['Datum', 'Bezeichnung', 'Bundesland'];
+      if (model.bundeslaender.length) title += ' ' + model.bundeslaender.join(' und ');
+      body = `<ul>${L.ferienRows.map((f) => listRow({ datum: fmtList(f.von, f.bis), name: f.bezeichnung, sub: f.art === 'ferien' ? 'Schulferien' : 'Feiertag, schulfrei', ort: f.bundesland || '' })).join('')}</ul>`;
+    }
+    const empty = !/<li/.test(body);
+    return `<h2 id="termine-modal-title" class="text-xl font-semibold">${esc(title)}</h2>
+      <p class="text-xs text-zinc-500 mt-1">${esc(head.sub)}</p>
+      <div class="mt-4">
+        ${empty ? '<p class="text-sm text-zinc-500">Keine Einträge.</p>' : `<div class="hidden sm:grid grid-cols-[168px_1fr_168px] gap-x-3 px-2 pb-1 text-xs text-zinc-400"><span>${esc(cols[0])}</span><span>${esc(cols[1])}</span><span>${esc(cols[2])}</span></div>${body}`}
+      </div>`;
+  }
+
+  // "Zurueck zur Liste", wenn ein Haus aus einer Liste heraus geoeffnet wurde
+  const backHtml = () => {
+    const k = state.back && state.back.startsWith('l:') ? state.back.slice(2) : '';
+    return k && LIST_HEAD[k] ? `<button type="button" data-open="${esc(state.back)}" class="${linkCls} -mt-2 mb-2" style="min-height:44px">← Zurück zur Liste</button>` : '';
+  };
+
   function detailHtml(model, key) {
+    if (key.startsWith('l:')) return listHtml(model, key.slice(2));
     const status = state.status || {};
     const item = model.byKey.get(key) || null;
     let h = null;
@@ -464,7 +567,7 @@ const TerminePlan = (() => {
     if (!item && !h) return null;
     // Event ohne Hotel
     if (!h) {
-      return `<h2 id="termine-modal-title" class="text-xl font-semibold">${esc(item.titel)}</h2>
+      return `${backHtml()}<h2 id="termine-modal-title" class="text-xl font-semibold">${esc(item.titel)}</h2>
         <div class="mt-2"><span class="shrink-0 text-xs rounded-full px-2 py-1 bg-zinc-900 text-white">Anderer Termin</span></div>
         <p class="text-sm text-zinc-800 mt-4">${esc(fmtRange(item.von, item.bis))} · ${esc(relText(item.von, item.bis, model.today))}</p>
         ${item.notiz ? `<div class="mt-3 text-sm text-zinc-800" style="white-space:pre-line">${esc(item.notiz)}</div>` : ''}`;
@@ -492,7 +595,7 @@ const TerminePlan = (() => {
     const lang = h.vereinbarung_kurz && h.vereinbarung ? kurzHtml(h.vereinbarung) : '';
     const mail = safeMailUrl(h.mail_url);
     const meta = [place(h), h.gruppe].filter(Boolean).join(' · ');
-    return `<h2 id="termine-modal-title" class="text-xl font-semibold">${esc(h.hotelname)}</h2>
+    return `${backHtml()}<h2 id="termine-modal-title" class="text-xl font-semibold">${esc(h.hotelname)}</h2>
       ${meta ? `<p class="text-xs text-zinc-400 mt-1">${esc(meta)}</p>` : ''}
       <div class="mt-3 flex flex-wrap items-center gap-2">${ampel ? pillHtml(ampel) : ''}${stPill}${ballPill}</div>
       <div class="mt-2 flex gap-4">${linksHtml(h)}</div>
@@ -523,7 +626,12 @@ const TerminePlan = (() => {
         </div>
       </div>`;
     doc.body.appendChild(el);
-    el.addEventListener('click', (e) => { if (e.target.closest('[data-close]')) closeModal(); });
+    el.addEventListener('click', (e) => {
+      if (e.target.closest('[data-close]')) { closeModal(); return; }
+      // Zeile in einer Liste oder "Zurueck zur Liste": Inhalt im selben Dialog wechseln, der Fokus-Rueckweg bleibt der urspruengliche Knopf
+      const b = e.target.closest('[data-open]');
+      if (b && el.contains(b)) showModal(b.dataset.open, el, doc, state.current && state.current.startsWith('l:') ? state.current : null);
+    });
     doc.addEventListener('keydown', (e) => {
       if (el.classList.contains('hidden')) return;
       if (e.key === 'Escape') { closeModal(); return; }
@@ -538,17 +646,25 @@ const TerminePlan = (() => {
     return el;
   }
 
-  function openModal(key, opener) {
-    if (!state.model) return;
+  // Inhalt des Dialogs setzen (Haus, Ereignis oder Liste); back = Schluessel der Liste, aus der man kam
+  function showModal(key, el, doc, back) {
+    if (!state.model) return false;
+    state.back = back || null;
     const html = detailHtml(state.model, key);
-    if (!html) return;
-    const doc = (opener || document.body).ownerDocument || document;
-    const el = ensureModal(doc);
+    if (!html) return false;
+    state.current = key;
     el.querySelector('[data-content]').innerHTML = html;
-    state.lastFocus = opener || null;
     el.classList.remove('hidden');
     doc.body.classList.add('overflow-hidden');
     el.querySelector('button[data-close].absolute').focus();
+    return true;
+  }
+
+  function openModal(key, opener) {
+    if (!state.model) return;
+    const doc = (opener || document.body).ownerDocument || document;
+    const el = ensureModal(doc);
+    if (showModal(key, el, doc, null)) state.lastFocus = opener || null;
   }
 
   function closeModal() {
@@ -556,6 +672,8 @@ const TerminePlan = (() => {
     if (!el) return;
     el.classList.add('hidden');
     document.body.classList.remove('overflow-hidden');
+    state.current = null;
+    state.back = null;
     if (state.lastFocus && state.lastFocus.focus) state.lastFocus.focus();
   }
 
@@ -565,7 +683,7 @@ const TerminePlan = (() => {
     const model = build(data);
     state.model = model;
     state.status = data.status || {};
-    root.innerHTML = headerHtml(model, data.hinweis) + todoHtml(model) + legendHtml() + calendarHtml(model) + staysHtml(model) + openHtml(model) + eventsHtml(model);
+    root.innerHTML = headerHtml(model, data.hinweis) + todoHtml(model) + legendHtml(model) + calendarHtml(model) + staysHtml(model) + openHtml(model) + eventsHtml(model);
     root.onclick = (e) => {
       const b = e.target.closest('[data-open]');
       if (b && root.contains(b)) openModal(b.dataset.open, b);
