@@ -165,12 +165,30 @@ async function loadStatusDefs() {
 }
 
 async function loadHotels() {
-  const { data, error } = await sb
-    .from('hotels')
-    .select('*')
-    .order('hotelname', { ascending: true });
-  if (error) { console.error(error); alert('Fehler beim Laden: ' + error.message); return; }
-  allHotels = data || [];
+  // PostgREST answers at most 1000 rows per request (the table has more), so read it page by page.
+  // The id breaks ties between equal names, otherwise the pages can overlap or skip rows.
+  // The total from the first answer is checked at the end: a short list must never pass silently
+  // (it once hid every hotel behind "M", among them three finished cooperations).
+  const PAGE = 1000;
+  const rows = [];
+  let total = null;
+  while (total === null || rows.length < total) {
+    const { data, error, count } = await sb
+      .from('hotels')
+      .select('*', total === null ? { count: 'exact' } : {})
+      .order('hotelname', { ascending: true })
+      .order('id', { ascending: true })
+      .range(rows.length, rows.length + PAGE - 1);
+    if (error) { console.error(error); alert('Fehler beim Laden: ' + error.message); return; }
+    if (total === null) total = count;
+    if (!data || !data.length) break;
+    rows.push(...data);
+  }
+  if (total !== null && rows.length !== total) {
+    console.error('hotels: ' + rows.length + ' of ' + total + ' rows loaded');
+    alert('Es wurden nur ' + rows.length + ' von ' + total + ' Hotels geladen. Bitte die Seite neu laden.');
+  }
+  allHotels = rows;
   buildContactIndex();
   buildFilters();
   renderLegend();
