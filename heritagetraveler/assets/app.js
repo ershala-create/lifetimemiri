@@ -32,8 +32,6 @@ let templates = [];
 let sortKey = 'hotelname';
 let sortDir = 1; // 1 asc, -1 desc
 let modalHotel = null;
-let quickFilter = null;       // null | 'nachfassen' | 'ohne_email'
-let activeQuick = 'aktiv';    // welcher Quick-Chip ist aktiv (Highlight)
 let groupBy = '';             // '' | 'land' | 'region' | 'gruppe' | 'status'
 const collapsedGroups = new Set();
 let activeTab = 'hotels';     // 'alle' | 'hotels' | 'gruppen' | 'antworten' | 'termine'
@@ -41,7 +39,6 @@ let gruppenDrilldown = null;  // null | normierter Gruppen-Key (Drilldown-Ansich
 let antwortenFilter = null;   // null | key aus ANTWORT_SECTIONS (angeklickte Kachel)
 let syncState = null;         // null (ladend) | { gmail_eingang, gmail_ausgang } aus sync_state
 let termineData = null;       // null (ladend) | { ferien, plan, todos } aus schulferien + plan_termine + miri_todos
-const NACHFASS_DAYS = 30;     // Schwelle fuer "Nachfassen faellig"
 const HIDE_BY_DEFAULT = ['kooperiert', 'ausgeschlossen', 'antwort_negativ']; // Partner/Ausgeschlossen/Absage ausgeblendet bis explizit gefiltert
 
 // ---- Elements ----
@@ -194,13 +191,40 @@ async function loadHotels() {
       : 'Es wurden nur ' + rows.length + ' von ' + total + ' Hotels geladen. Bitte die Seite neu laden.');
   }
   allHotels = rows;
+  hotelsStamp = stampOf(rows);
   buildContactIndex();
   buildFilters();
   renderLegend();
   render();
+  showSyncTime();
   if (activeTab === 'antworten') renderAntworten();
   if (activeTab === 'termine') renderTermine();
 }
+
+// ===================== LIVE-SYNC MIT DER DB =====================
+// Die DB ist die einzige Quelle für Chips und Liste. Alle 60 Sekunden fragen wir winzig nach (neueste updated_at plus
+// Anzahl) und laden die Hotels nur dann neu, wenn sich etwas geändert hat. Filter und Sortierung bleiben dabei erhalten.
+const SYNC_MS = 60000;
+let hotelsStamp = null;       // 'neueste updated_at|Anzahl' des zuletzt geladenen Stands
+function stampOf(rows) {
+  let max = '';
+  for (const r of rows) if (r.updated_at && r.updated_at > max) max = r.updated_at;
+  return max + '|' + rows.length;
+}
+function showSyncTime() {
+  const el = $('sync-info');
+  if (el) el.textContent = 'live aus der DB, Stand ' + new Date().toLocaleTimeString('de-AT', { hour: '2-digit', minute: '2-digit' });
+}
+async function syncHotelsIfChanged() {
+  if (!appLoaded || !hotelsStamp || document.hidden === true) return;
+  const { data, error, count } = await sb.from('hotels').select('updated_at', { count: 'exact' })
+    .order('updated_at', { ascending: false }).range(0, 0);
+  if (error || !data || !data.length) return;
+  if ((data[0].updated_at || '') + '|' + count !== hotelsStamp) await loadHotels();
+  else showSyncTime();
+}
+setInterval(syncHotelsIfChanged, SYNC_MS);
+document.addEventListener('visibilitychange', () => { if (document.hidden !== true) syncHotelsIfChanged(); });
 
 // Stand des letzten Gmail-Abgleichs (Tabelle sync_state), nur fuer die Zeile im Reiter Antworten.
 async function loadSyncState() {
@@ -249,12 +273,14 @@ async function updateStatus(id, status) {
   if (error) { alert('Konnte Status nicht speichern: ' + error.message); return false; }
   const h = allHotels.find((x) => x.id === id);
   if (h) h.status = status;
-  renderSummary();
+  renderChips();
   return true;
 }
 
 // ===================== FILTERS =====================
 function buildFilters() {
+  // aktuelle Auswahl merken: ein Neuladen aus der DB darf den gewählten Filter nicht zurücksetzen
+  const keep = ['filter-status', 'filter-land', 'filter-gruppe'].map((id) => [id, $(id).value]);
   const fs = $('filter-status');
   fs.innerHTML = '<option value="">Alle Status</option>' +
     STATUS_KEYS.map((k) => `<option value="${k}">${STATUS[k].label}</option>`).join('');
@@ -264,15 +290,11 @@ function buildFilters() {
   const gruppen = [...new Set(allHotels.map((h) => h.gruppe).filter(Boolean))].sort((a, b) => a.localeCompare(b));
   $('filter-gruppe').innerHTML = '<option value="">Alle Gruppen</option>' +
     gruppen.map((g) => `<option value="${escapeAttr(g)}">${escapeHtml(g)}</option>`).join('');
+  keep.forEach(([id, v]) => {
+    const el = $(id);
+    if (v && (!el.options || [...el.options].some((o) => o.value === v))) el.value = v;
+  });
   renderChips();
-}
-
-function hasEmail(h) { return !!(h.email_1 || h.email_allgemein || h.email_2); }
-function olderThanDays(dateStr, days) {
-  if (!dateStr) return false;
-  const d = new Date(dateStr);
-  if (isNaN(d)) return false;
-  return (Date.now() - d.getTime()) > days * 86400000;
 }
 
 // ===================== DOPPELKONTAKT-SCHUTZ =====================
@@ -337,10 +359,6 @@ function getFiltered() {
     if (fStatus && h.status !== fStatus) return false;
     if (fLand && h.land !== fLand) return false;
     if (fGruppe && h.gruppe !== fGruppe) return false;
-    if (quickFilter === 'ohne_email' && hasEmail(h)) return false;
-    if (quickFilter === 'alt_offen' && !h.alt_offen) return false;
-    if (quickFilter === 'nachfassen' && !(h.status === 'angefragt' && olderThanDays(h.angefragt_am, NACHFASS_DAYS))) return false;
-    if (quickFilter === 'nachfass_bereit' && !(h.status === 'angefragt' && h.nachfass_bereit_am)) return false;
     if (q) {
       const hay = [h.hotelname, h.ort, h.region, h.gruppe, h.email_1, h.email_2, h.email_allgemein, h.ansprechperson_1]
         .filter(Boolean).join(' ').toLowerCase();
@@ -360,7 +378,6 @@ function getFiltered() {
 function render() {
   const rows = getFiltered();
   $('count-badge').textContent = `${rows.length} von ${allHotels.length} Hotels`;
-  renderSummary();
   renderChips();
 
   if (rows.length === 0) {
@@ -451,10 +468,9 @@ function switchTab(tab) {
   const terminePanel = $('termine-panel');
   if (terminePanel) terminePanel.classList.toggle('hidden', tab !== 'termine');
   try { history.replaceState(null, '', tab === 'hotels' ? location.pathname + location.search : '#' + tab); } catch (e) { /* file:// or sandbox */ }
-  // Quick-Chips sind die Aktiv-Arbeitsliste -> nur im Hotels-Tab sichtbar
+  // Status-Chips sind die Aktiv-Arbeitsliste -> nur im Hotels-Tab sichtbar
   $('quick-chips').classList.toggle('hidden', tab !== 'hotels');
-  if (tab === 'alle') { quickFilter = null; activeQuick = null; $('filter-status').value = ''; }
-  if (tab === 'hotels' && !activeQuick) { activeQuick = 'aktiv'; $('filter-status').value = ''; }
+  if (tab === 'alle') $('filter-status').value = '';
   if (showHotels) render();
   if (tab === 'gruppen') renderGruppen();
   if (tab === 'antworten') {
@@ -755,7 +771,6 @@ function antwortPipelineHtml() {
       <div class="flex-1 h-1 rounded-full bg-zinc-100 overflow-hidden"><div class="h-full rounded-full bg-zinc-900" style="width:${Math.round(counts[k] / max * 100)}%"></div></div>
       <span class="w-12 text-right text-xs text-zinc-500 tabular-nums">${counts[k]}</span>
     </div>`).join('');
-  const bereit = allHotels.filter((h) => h.status === 'angefragt' && h.nachfass_bereit_am).length;
   return `<section class="mb-6">
     <div class="flex items-baseline gap-2 mb-1">
       <h3 class="text-sm font-medium text-zinc-900">Alle Häuser im Überblick</h3>
@@ -764,7 +779,6 @@ function antwortPipelineHtml() {
     <p class="text-xs text-zinc-500 mb-3">So verteilen sich alle Häuser auf die Status.</p>
     <div class="bg-white border border-zinc-200 rounded-xl card-shadow p-4">
       ${rows}
-      ${bereit ? `<p class="text-xs text-zinc-500 mt-3">Davon zum Nachfassen bereit: ${bereit} (Reiter Hotels, Filter „Nachfassen bereit“)</p>` : ''}
     </div>
   </section>`;
 }
@@ -809,69 +823,31 @@ function wireAntworten(root) {
   els.forEach((e) => io.observe(e));
 }
 
-// ---- Quick-Chips (Schnellfilter) ----
-const QUICK_CHIPS = [
-  { key: 'aktiv', label: 'Aktiv', hint: 'Alle Hotels ausser Partner, Absagen und Ausgeschlossene — die aktive Arbeitsliste.' },
-  { key: 'bereit', label: 'Bereit zum Anschreiben', hint: 'Recherchiert, aber noch KEIN Entwurf erstellt — hier muss noch eine Mail vorbereitet werden.' },
-  { key: 'entwurf', label: 'Entwurf bereit', hint: 'Entwurf liegt fertig in Gmail, aber noch nicht gesendet — Miris Sende-Liste.' },
-  { key: 'zusage', label: 'Zusage', hint: 'Hotel hat positiv geantwortet, Kooperation in Verhandlung (noch nicht final).' },
-  { key: 'nachfassen', label: 'Nachfassen fällig', hint: 'Schon angefragt, aber seit über 30 Tagen keine Antwort — freundlich erinnern.' },
-  { key: 'nachfass_bereit', label: 'Nachfassen bereit', hint: 'Zum Nachfassen freigegeben: seit über 60 Tagen keine Antwort. Nur markiert, noch keine Welle geplant.' },
-  { key: 'wiedervorlage', label: 'Wiedervorlage', hint: 'Temporär abgesagt (ausgebucht/Saison) — später erneut anfragen.' },
-  { key: 'ohne_email', label: 'Ohne E-Mail', hint: 'Noch keine E-Mail-Adresse hinterlegt — Adresse muss recherchiert werden.' },
-  { key: 'warten', label: 'Warten', hint: 'Zurückgestellt: gleiche Gruppe/Person bereits in Kontakt (Doppelkontakt-Schutz) oder ganze Region zurückgestellt (z.B. China).' },
-  { key: 'partner', label: 'Partner', hint: 'Kooperation abgeschlossen — bereits zu Gast gewesen.' },
-  { key: 'absagen', label: 'Absagen', hint: 'Hotel hat endgültig abgelehnt — die Absagen-Liste.' },
-  { key: 'alt_offen', label: 'Alt-Konto offen', hint: 'Nur vom alten @heritagetraveler.com-Konto angeschrieben (wahrscheinlich im Spam), nie per Gmail — Kandidaten zum Wiederanschreiben. Temporärer Filter.' },
-  { key: 'ausgeschlossen', label: 'Ausgeschlossen', hint: 'Passt nicht (z.B. adults-only, geschlossen) oder Doppeleintrag.' },
-];
-// Anzahl Hotels je Schnellfilter (fuer Chip-Badges)
-function quickCount(key) {
-  const has = (h) => !!(h.email_1 || h.email_allgemein || h.email_2);
-  const old30 = (h) => h.angefragt_am && (Date.now() - new Date(h.angefragt_am).getTime()) > NACHFASS_DAYS * 86400000;
-  return allHotels.filter((h) => {
-    switch (key) {
-      case 'aktiv':          return !HIDE_BY_DEFAULT.includes(h.status);
-      case 'bereit':         return h.status === 'offen';
-      case 'entwurf':        return h.status === 'entwurf';
-      case 'zusage':         return h.status === 'zusage';
-      case 'nachfassen':     return h.status === 'angefragt' && old30(h);
-      case 'nachfass_bereit': return h.status === 'angefragt' && !!h.nachfass_bereit_am;
-      case 'wiedervorlage':  return h.status === 'wiedervorlage';
-      case 'ohne_email':     return !has(h) && !HIDE_BY_DEFAULT.includes(h.status);
-      case 'warten':         return h.status === 'warten';
-      case 'partner':        return h.status === 'kooperiert';
-      case 'absagen':        return h.status === 'antwort_negativ';
-      case 'alt_offen':      return h.alt_offen === true;
-      case 'ausgeschlossen': return h.status === 'ausgeschlossen';
-      default:               return 0;
-    }
-  }).length;
+// ---- Status-Chips (Schnellfilter) ----
+// Ein Chip je Status aus status_defs (Name, Farbe, Reihenfolge), mit der Zahl der Häuser. Der Chip ist Filter und
+// Farblegende zugleich: Klick zeigt nur diesen Status, nochmal Klick hebt den Filter auf. Welcher Chip aktiv ist,
+// steht allein im Status-Auswahlfeld, die Chips sind nur seine Anzeige.
+function quickCount(status) {
+  return allHotels.filter((h) => h.status === status).length;
 }
 function renderChips() {
   const wrap = $('quick-chips');
   if (!wrap) return;
-  wrap.innerHTML = QUICK_CHIPS.map((c) => {
-    const on = activeQuick === c.key;
-    const n = quickCount(c.key);
-    const badge = `<span class="ml-1 ${on ? 'opacity-80' : 'text-zinc-400'}">${n}</span>`;
-    return `<button data-quick="${c.key}" title="${escapeAttr(c.hint || '')}" class="text-xs px-3 py-1.5 rounded-full border transition-colors ${on ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-600 border-zinc-200 hover:bg-zinc-50'}">${c.label}${badge}</button>`;
+  const current = $('filter-status').value;
+  const hints = Object.fromEntries(LEGEND);
+  wrap.innerHTML = STATUS_KEYS.map((k) => {
+    const on = current === k;
+    const cls = `text-xs px-3 py-1.5 rounded-full border transition-colors ${STATUS[k].cls} ${on ? 'border-zinc-900' : 'border-transparent hover:brightness-95'}`;
+    const hint = (hints[k] || '') + (on ? ' (Nochmal klicken hebt den Filter auf.)' : '');
+    return `<button data-status="${k}" aria-pressed="${on}" title="${escapeAttr(hint)}" class="${cls}">${STATUS[k].label}<span class="ml-1 opacity-70">${quickCount(k)}</span></button>`;
   }).join('');
-  wrap.querySelectorAll('button[data-quick]').forEach((b) => {
-    b.addEventListener('click', () => applyQuick(b.dataset.quick));
+  wrap.querySelectorAll('button[data-status]').forEach((b) => {
+    b.addEventListener('click', () => applyQuick(b.dataset.status));
   });
 }
-function applyQuick(key) {
-  quickFilter = null;
-  activeQuick = key;
+function applyQuick(status) {
   const s = $('filter-status');
-  const map = { bereit: 'offen', entwurf: 'entwurf', zusage: 'zusage', wiedervorlage: 'wiedervorlage', warten: 'warten', partner: 'kooperiert', absagen: 'antwort_negativ', ausgeschlossen: 'ausgeschlossen' };
-  if (key === 'aktiv') s.value = '';
-  else if (key === 'nachfassen') { s.value = 'angefragt'; quickFilter = 'nachfassen'; }
-  else if (key === 'nachfass_bereit') { s.value = 'angefragt'; quickFilter = 'nachfass_bereit'; }
-  else if (key === 'ohne_email') { s.value = ''; quickFilter = 'ohne_email'; }
-  else if (key === 'alt_offen') { s.value = ''; quickFilter = 'alt_offen'; }
-  else s.value = map[key] || '';
+  s.value = s.value === status ? '' : status;
   render();
 }
 
@@ -894,13 +870,7 @@ function rowHtml(h) {
       </select>
     </td>
     <td class="px-3 py-2.5 align-top text-zinc-600 whitespace-nowrap">${dateCell(h)}</td>
-    <td class="px-3 py-2.5 align-top text-zinc-600 max-w-[240px] hidden md:table-cell">
-      ${h.bemerkung
-        ? h.bemerkung.split('·').map(s => s.trim()).filter(Boolean).map(s =>
-            `<span class="inline-block text-xs px-2 py-0.5 rounded-full bg-zinc-100 text-zinc-600 border border-zinc-200 mr-1 mb-1">${escapeHtml(s)}</span>`
-          ).join('')
-        : '<span class="text-zinc-300">—</span>'}
-    </td>
+    <td class="px-3 py-2.5 align-top text-zinc-600 max-w-[240px] hidden md:table-cell">${bemerkungCell(h.bemerkung)}</td>
     <td class="px-3 py-2.5 align-top text-zinc-600 max-w-[220px] hidden lg:table-cell">
       ${h.auswahl_grund ? `<div class="text-xs text-zinc-600">${escapeHtml(h.auswahl_grund)}</div>` : '<span class="text-zinc-300">—</span>'}
       ${h.preis_ab ? `<div class="text-xs text-zinc-400 mt-0.5">ab ${escapeHtml(String(h.preis_ab))} ${escapeHtml(h.waehrung || 'EUR')}${h.preis_basis ? ' / ' + escapeHtml(h.preis_basis) : ''}</div>` : ''}
@@ -916,16 +886,6 @@ function rowHtml(h) {
 function statusSelectCls(status) {
   const s = STATUS[status] || STATUS.offen;
   return `text-xs rounded-full px-2.5 py-1 border-0 font-medium cursor-pointer focus:ring-2 focus:ring-zinc-900/10 ${s.cls}`;
-}
-
-function renderSummary() {
-  const counts = {};
-  STATUS_KEYS.forEach((k) => (counts[k] = 0));
-  allHotels.forEach((h) => { if (counts[h.status] != null) counts[h.status]++; });
-  $('status-summary').innerHTML = STATUS_KEYS
-    .filter((k) => counts[k] > 0)
-    .map((k) => `<span class="text-xs rounded-full px-2.5 py-1 ${STATUS[k].cls}">${STATUS[k].label}: ${counts[k]}</span>`)
-    .join('');
 }
 
 // ---- Legende rendern (einmal, statisch) ----
@@ -1014,7 +974,7 @@ document.querySelectorAll('.copy-btn').forEach((b) => {
 
 // ===================== TOOLBAR WIRING =====================
 $('search').addEventListener('input', debounce(render, 150));
-$('filter-status').addEventListener('change', () => { quickFilter = null; activeQuick = null; render(); });
+$('filter-status').addEventListener('change', render);
 $('filter-land').addEventListener('change', render);
 $('filter-gruppe').addEventListener('change', render);
 $('group-by').addEventListener('change', (e) => { groupBy = e.target.value; collapsedGroups.clear(); render(); });
@@ -1056,13 +1016,36 @@ function csvCell(v) {
   const s = String(v);
   return /[";\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
 }
-// Datumsspalte: bei Partnern das Besuchs-/Kooperationsdatum (Spalte H), sonst Anfrage-Datum
+// Datumsspalte: Partner zeigen den Aufenthalt (von bis, aus termin_von/termin_bis) mit Hotel-Icon, nie das Anfragedatum.
+// Fehlt das Datum, steht das sichtbar da, statt still das Anfragedatum zu zeigen.
+function stayRange(h) {
+  if (!h.termin_von) return '';
+  const von = formatDate(h.termin_von);
+  if (!h.termin_bis || h.termin_bis === h.termin_von) return von;
+  return `${von.slice(0, 6)} bis ${formatDate(h.termin_bis)}`;
+}
 function dateCell(h) {
-  if (h.status === 'kooperiert' && h.besucht) {
-    const v = String(h.besucht).replace(' 00:00:00', '');
-    return `<span class="text-violet-700" title="Besuch / Kooperation (Excel Spalte H)">🏨 ${escapeHtml(v)}</span>`;
+  if (h.status === 'kooperiert') {
+    const r = stayRange(h);
+    return r
+      ? `<span class="text-violet-700 whitespace-nowrap" title="Aufenthalt / Kooperation">🏨 ${r}</span>`
+      : '<span class="text-amber-600 whitespace-nowrap" title="Für diesen Partner ist kein Aufenthaltsdatum eingetragen">🏨 Datum offen</span>';
   }
   return h.angefragt_am ? formatDate(h.angefragt_am) : '<span class="text-zinc-300">—</span>';
+}
+// Bemerkung kompakt: eine einzige Zeile mit dem Anfang, ein Klick klappt alle Teile auf (Teile sind mit "·" oder " | " getrennt)
+function bemerkungCell(text) {
+  const parts = String(text || '').split(/\s+\|\s+|\s*·\s*/).map((s) => s.trim()).filter(Boolean);
+  if (!parts.length) return '<span class="text-zinc-300">—</span>';
+  if (parts.length === 1 && parts[0].length <= 36) return `<span class="text-xs text-zinc-600">${escapeHtml(parts[0])}</span>`; // passt in die Zeile
+  const more = parts.length > 1 ? `<span class="group-open:hidden shrink-0 text-zinc-400">+${parts.length - 1}</span>` : '';
+  return `<details class="group text-xs text-zinc-600 w-56">
+      <summary class="flex items-baseline gap-1 cursor-pointer list-none [&::-webkit-details-marker]:hidden">
+        <span class="group-open:hidden truncate" title="Klicken für die ganze Bemerkung">${escapeHtml(parts[0])}</span>${more}
+        <span class="hidden group-open:inline text-zinc-400">weniger</span>
+      </summary>
+      <div class="mt-1 space-y-1">${parts.map((p) => `<p>${escapeHtml(p)}</p>`).join('')}</div>
+    </details>`;
 }
 function formatDate(d) {
   const dt = new Date(d);
