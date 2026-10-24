@@ -169,10 +169,12 @@ async function loadHotels() {
   // The id breaks ties between equal names, otherwise the pages can overlap or skip rows.
   // The total from the first answer is checked at the end: a short list must never pass silently
   // (it once hid every hotel behind "M", among them three finished cooperations).
-  const PAGE = 1000;
+  // MAX_PAGES ends the loop if a server keeps answering without an end.
+  const PAGE = 1000, MAX_PAGES = 20;
   const rows = [];
-  let total = null;
-  while (total === null || rows.length < total) {
+  let total = null, pages = 0, ended = false;
+  while ((total === null || rows.length < total) && pages < MAX_PAGES) {
+    pages++;
     const { data, error, count } = await sb
       .from('hotels')
       .select('*', total === null ? { count: 'exact' } : {})
@@ -180,13 +182,16 @@ async function loadHotels() {
       .order('id', { ascending: true })
       .range(rows.length, rows.length + PAGE - 1);
     if (error) { console.error(error); alert('Fehler beim Laden: ' + error.message); return; }
-    if (total === null) total = count;
-    if (!data || !data.length) break;
+    if (total === null && Number.isFinite(count) && count >= 0) total = count;
+    if (!data || !data.length) { ended = true; break; }
     rows.push(...data);
   }
-  if (total !== null && rows.length !== total) {
-    console.error('hotels: ' + rows.length + ' of ' + total + ' rows loaded');
-    alert('Es wurden nur ' + rows.length + ' von ' + total + ' Hotels geladen. Bitte die Seite neu laden.');
+  // without a usable total the list is complete only if the server ended it before the page limit
+  if (total === null ? !ended : rows.length !== total) {
+    console.error('hotels: ' + rows.length + ' rows loaded, total ' + total);
+    alert(total === null
+      ? 'Die Hotelliste ist unvollständig. Bitte die Seite neu laden.'
+      : 'Es wurden nur ' + rows.length + ' von ' + total + ' Hotels geladen. Bitte die Seite neu laden.');
   }
   allHotels = rows;
   buildContactIndex();
