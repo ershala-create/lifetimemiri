@@ -17,9 +17,9 @@ let STATUS_KEYS = [];
 const LEGEND = [
   ['offen', 'Recherchiert, aber noch KEIN Entwurf — hier muss noch eine Mail vorbereitet werden.'],
   ['entwurf', 'Entwurf liegt fertig in Gmail, noch nicht gesendet — die Sende-Liste.'],
-  ['angefragt', 'Mail gesendet, wartet auf Antwort des Hotels.'],
+  ['angefragt', 'Mail gesendet, wartet auf Antwort des Hauses. Nach 28 Tagen ohne Antwort geht es auf Wiedervorlage.'],
   ['zusage', 'Hotel hat positiv geantwortet, Kooperation in Verhandlung (noch nicht final).'],
-  ['wiedervorlage', 'Temporär abgesagt (ausgebucht/Saison) — später erneut anfragen.'],
+  ['wiedervorlage', 'Später erneut ansprechen: vorübergehend abgesagt (Saison, ausgebucht) oder 28 Tage ohne Antwort. Kam die erste Mail vom Altkonto oder mit umgeleiteten Links, wird frisch angeschrieben, sonst mit Bezug nachgefasst.'],
   ['warten', 'Zurückgestellt: gleiche Gruppe/Person schon in Kontakt (Doppelkontakt) oder ganze Region zurückgestellt (z.B. China).'],
   ['kooperiert', 'Kooperation abgeschlossen — bereits zu Gast gewesen (Partner).'],
   ['antwort_negativ', 'Endgültig abgelehnt.'],
@@ -299,7 +299,7 @@ function buildFilters() {
 
 // ===================== DOPPELKONTAKT-SCHUTZ =====================
 // "Bereits im Kontakt" = wir haben diesen Kanal schon angefasst.
-const CONTACTED = new Set(['angefragt', 'zusage', 'warten', 'kooperiert']);
+const CONTACTED = new Set(['angefragt', 'zusage', 'warten', 'wiedervorlage', 'kooperiert']);
 let contactIndex = { byPerson: new Map(), byEmail: new Map() };
 
 function normStr(s) { return (s || '').trim().toLowerCase(); }
