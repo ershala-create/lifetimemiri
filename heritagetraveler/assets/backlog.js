@@ -7,6 +7,7 @@
 const BacklogView = (() => {
   const FEEDBACK = 'feedback';
   const NO_GROUP = 'Ohne Gruppe';
+  const DONE_KEY = 'alle';
   // Vorbewertung: Label und Farbe; Farbe nur als Semantik (grün = los, gelb = Achtung), sonst neutral
   const VORB = {
     go: { label: 'Umsetzbar', cls: 'bg-green-50 text-green-700' },
@@ -19,7 +20,7 @@ const BacklogView = (() => {
 
   // state survives re-renders from the 60 second reload
   const openRows = new Set();   // ids of expanded rows
-  const openDone = new Set();   // group keys with the done rows unfolded
+  const openDone = new Set();   // holds DONE_KEY while the Erledigt block is unfolded
   let rootRef = null;
 
   const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -54,8 +55,9 @@ const BacklogView = (() => {
       const best = open.length ? prio(open[0]) : 2e9; // groups with open tasks come first, smallest priority first
       return { name, open, done, best };
     }).sort((a, b) => (a.best - b.best) || a.name.localeCompare(b.name, 'de'));
-    const done = list.filter(isDone).length;
-    return { feedback: fb, tasks, counts: { total: list.length, open: list.length - done, done, feedback: fb.length } };
+    const doneAll = list.filter(isDone).sort((a, b) => (ts(b.done_at) - ts(a.done_at)) || byId(b, a));
+    const done = doneAll.length;
+    return { feedback: fb, tasks, doneAll, counts: { total: list.length, open: list.length - done, done, feedback: fb.length } };
   }
 
   // ---------- HTML ----------
@@ -99,15 +101,16 @@ const BacklogView = (() => {
     </section>`;
   }
   function groupHtml(g) {
-    const doneKey = esc(g.name);
-    const unfolded = openDone.has(g.name);
-    const openRowsHtml = g.open.map((r) => rowHtml(r, false)).join('') || '<p class="px-4 py-3 text-sm text-zinc-400">Nichts offen.</p>';
-    const doneHtml = g.done.length
-      ? `<button type="button" data-bl-done="${doneKey}" aria-expanded="${unfolded ? 'true' : 'false'}" class="w-full text-left px-4 py-2 border-t border-zinc-100 text-xs text-zinc-500 hover:bg-zinc-50" style="min-height:44px">${unfolded ? 'Erledigte ausblenden' : 'Erledigte anzeigen'} (${g.done.length})</button>`
-        + (unfolded ? g.done.map((r) => rowHtml(r, false)).join('') : '')
-      : '';
-    const count = `${g.open.length} offen${g.done.length ? ' · ' + g.done.length + ' erledigt' : ''}`;
-    return cardHtml(g.name, count, openRowsHtml + doneHtml);
+    if (!g.open.length) return ''; // done rows live in the Erledigt block at the bottom
+    return cardHtml(g.name, `${g.open.length} offen`, g.open.map((r) => rowHtml(r, false)).join(''));
+  }
+  // one collapsible block at the bottom with every done row (feedback and tasks), newest first
+  function doneHtml(rows) {
+    if (!rows.length) return '';
+    const unfolded = openDone.has(DONE_KEY);
+    const inner = `<button type="button" data-bl-done="${DONE_KEY}" aria-expanded="${unfolded ? 'true' : 'false'}" class="w-full text-left px-4 py-3 text-sm text-zinc-600 hover:bg-zinc-50" style="min-height:44px">${unfolded ? 'Erledigte ausblenden' : 'Erledigte anzeigen'} (${rows.length})</button>`
+      + (unfolded ? rows.map((r) => rowHtml(r, true)).join('') : '');
+    return `<section class="mb-4 bg-white border border-zinc-200 rounded-xl card-shadow overflow-hidden">${inner}</section>`;
   }
 
   // ---------- Einstieg ----------
@@ -126,8 +129,10 @@ const BacklogView = (() => {
     let body = '';
     if (!c.total) body = '<p class="text-sm text-zinc-400 p-4">Noch keine Einträge im Backlog.</p>';
     else {
-      if (m.feedback.length) body += cardHtml('Feedback', `${m.feedback.filter((r) => !isDone(r)).length} offen · ${m.feedback.length} gesamt`, m.feedback.map((r) => rowHtml(r, true)).join(''));
+      const fbOpen = m.feedback.filter((r) => !isDone(r));
+      if (fbOpen.length) body += cardHtml('Feedback', `${fbOpen.length} offen`, fbOpen.map((r) => rowHtml(r, true)).join(''));
       body += m.tasks.map(groupHtml).join('');
+      body += doneHtml(m.doneAll);
     }
     root.innerHTML = head + hinweis + body;
     root.onclick = (e) => {
