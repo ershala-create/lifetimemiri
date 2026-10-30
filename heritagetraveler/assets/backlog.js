@@ -8,6 +8,8 @@ const BacklogView = (() => {
   const FEEDBACK = 'feedback';
   const NO_GROUP = 'Ohne Gruppe';
   const DONE_KEY = 'alle';
+  // highest priority once the new mailbox works (User 30.10.2026): this group sits above Feedback
+  const TOP_GROUP = 'Wartet auf Postfach';
   // Vorbewertung: Label und Farbe; Farbe nur als Semantik (grün = los, gelb = Achtung), sonst neutral
   const VORB = {
     go: { label: 'Umsetzbar', cls: 'bg-green-50 text-green-700' },
@@ -130,8 +132,9 @@ const BacklogView = (() => {
     if (!c.total) body = '<p class="text-sm text-zinc-400 p-4">Noch keine Einträge im Backlog.</p>';
     else {
       const fbOpen = m.feedback.filter((r) => !isDone(r));
+      body += m.tasks.filter((g) => g.name === TOP_GROUP).map(groupHtml).join('');
       if (fbOpen.length) body += cardHtml('Feedback', `${fbOpen.length} offen`, fbOpen.map((r) => rowHtml(r, true)).join(''));
-      body += m.tasks.map(groupHtml).join('');
+      body += m.tasks.filter((g) => g.name !== TOP_GROUP).map(groupHtml).join('');
       body += doneHtml(m.doneAll);
     }
     root.innerHTML = head + hinweis + body;
