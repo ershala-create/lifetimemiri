@@ -34,10 +34,13 @@ let sortDir = 1; // 1 asc, -1 desc
 let modalHotel = null;
 let groupBy = '';             // '' | 'land' | 'region' | 'gruppe' | 'status'
 const collapsedGroups = new Set();
-let activeTab = 'hotels';     // 'alle' | 'hotels' | 'gruppen' | 'antworten' | 'termine'
+let activeTab = 'hotels';     // 'alle' | 'hotels' | 'gruppen' | 'antworten' | 'termine' | 'backlog'
 let gruppenDrilldown = null;  // null | normierter Gruppen-Key (Drilldown-Ansicht)
 let antwortenFilter = null;   // null | key aus ANTWORT_SECTIONS (angeklickte Kachel)
 let syncState = null;         // null (ladend) | { gmail_eingang, gmail_ausgang } aus sync_state
+let backlogRows = null;       // null (ladend) | Zeilen aus ht_backlog
+let backlogHinweis = '';      // Fehlerhinweis im Reiter Backlog, leer = alles gut
+let backlogStamp = '';
 let termineData = null;       // null (ladend) | { ferien, plan, todos } aus schulferien + plan_termine + miri_todos
 const HIDE_BY_DEFAULT = ['kooperiert', 'ausgeschlossen', 'antwort_negativ']; // Partner/Ausgeschlossen/Absage ausgeblendet bis explizit gefiltert
 
@@ -138,7 +141,7 @@ function showApp(user) {
 // Direktlink auf einen Reiter, z.B. .../heritagetraveler/#termine
 function openTabFromHash() {
   const t = location.hash.replace('#', '');
-  if (['alle', 'hotels', 'gruppen', 'antworten', 'termine'].includes(t)) switchTab(t);
+  if (['alle', 'hotels', 'gruppen', 'antworten', 'termine', 'backlog'].includes(t)) switchTab(t);
 }
 
 // ===================== DATA =====================
@@ -452,6 +455,48 @@ function researchGroup(gruppe) {
   alert('Recherche-Auftrag in die Zwischenablage kopiert — füge ihn in Claude Code ein:\n\n' + prompt);
 }
 
+// ===================== BACKLOG (Tabelle ht_backlog) =====================
+// Seitenweise laden (PostgREST liefert höchstens 1000 Zeilen), Gesamtzahl prüfen, bei Fehler den alten Stand behalten.
+async function loadBacklog() {
+  const PAGE = 1000, MAX_PAGES = 20;
+  const rows = [];
+  let total = null, pages = 0, ended = false;
+  while ((total === null || rows.length < total) && pages < MAX_PAGES) {
+    pages++;
+    const { data, error, count } = await sb
+      .from('ht_backlog')
+      .select('*', total === null ? { count: 'exact' } : {})
+      .order('id', { ascending: true })
+      .range(rows.length, rows.length + PAGE - 1);
+    if (error) {
+      console.error(error);
+      backlogHinweis = 'Der Backlog konnte nicht geladen werden' + (backlogRows ? ', gezeigt wird der letzte Stand.' : '.');
+      renderBacklog();
+      return;
+    }
+    if (total === null && Number.isFinite(count) && count >= 0) total = count;
+    if (!data || !data.length) { ended = true; break; }
+    rows.push(...data);
+  }
+  const incomplete = total === null ? !ended : rows.length !== total;
+  const prevHinweis = backlogHinweis;
+  backlogHinweis = incomplete ? 'Der Backlog ist unvollständig (' + rows.length + (total !== null ? ' von ' + total : '') + ' Einträge). Bitte die Seite neu laden.' : '';
+  const stamp = JSON.stringify(rows);
+  if (backlogRows && stamp === backlogStamp && !backlogHinweis && !prevHinweis) return; // nothing changed, no redraw
+  backlogRows = rows;
+  backlogStamp = stamp;
+  renderBacklog();
+}
+function renderBacklog() {
+  const body = $('backlog-body');
+  if (!body || typeof BacklogView === 'undefined') return;
+  BacklogView.render(body, { rows: backlogRows, hinweis: backlogHinweis });
+  const c = backlogRows ? BacklogView.build(backlogRows).counts : null;
+  $('count-badge').textContent = c ? `${c.open} offen · ${c.done} erledigt` : '';
+}
+// alle 60 Sekunden nachladen, nur wenn der Reiter sichtbar ist
+setInterval(() => { if (appLoaded && activeTab === 'backlog' && document.hidden !== true) loadBacklog(); }, SYNC_MS);
+
 // ===================== TABS (Alle / Hotels / Gruppen) =====================
 function switchTab(tab) {
   activeTab = tab;
@@ -467,6 +512,8 @@ function switchTab(tab) {
   if (antwortenPanel) antwortenPanel.classList.toggle('hidden', tab !== 'antworten');
   const terminePanel = $('termine-panel');
   if (terminePanel) terminePanel.classList.toggle('hidden', tab !== 'termine');
+  const backlogPanel = $('backlog-panel');
+  if (backlogPanel) backlogPanel.classList.toggle('hidden', tab !== 'backlog');
   try { history.replaceState(null, '', tab === 'hotels' ? location.pathname + location.search : '#' + tab); } catch (e) { /* file:// or sandbox */ }
   // Status-Chips sind die Aktiv-Arbeitsliste -> nur im Hotels-Tab sichtbar
   $('quick-chips').classList.toggle('hidden', tab !== 'hotels');
@@ -480,6 +527,10 @@ function switchTab(tab) {
   if (tab === 'termine') {
     renderTermine();
     if (!termineData) loadTermineData();
+  }
+  if (tab === 'backlog') {
+    renderBacklog();
+    loadBacklog();
   }
 }
 
