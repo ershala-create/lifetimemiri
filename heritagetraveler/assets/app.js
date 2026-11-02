@@ -525,8 +525,8 @@ function switchTab(tab) {
   const backlogPanel = $('backlog-panel');
   if (backlogPanel) backlogPanel.classList.toggle('hidden', tab !== 'backlog');
   try { history.replaceState(null, '', tab === 'hotels' ? location.pathname + location.search : '#' + tab); } catch (e) { /* file:// or sandbox */ }
-  // Status-Chips sind die Aktiv-Arbeitsliste -> nur im Hotels-Tab sichtbar
-  $('quick-chips').classList.toggle('hidden', tab !== 'hotels');
+  // Status-Chips stehen in beiden Hotel-Tabs (Alle und Hotels), User 03.11.2026; Klick auf einen Chip filtert, nochmal Klick hebt auf
+  $('quick-chips').classList.toggle('hidden', !showHotels);
   if (tab === 'alle') $('filter-status').value = '';
   if (showHotels) render();
   if (tab === 'gruppen') renderGruppen();
