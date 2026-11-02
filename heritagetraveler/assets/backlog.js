@@ -9,7 +9,7 @@ const BacklogView = (() => {
   const NO_GROUP = 'Ohne Gruppe';
   const DONE_KEY = 'alle';
   // highest priority once the new mailbox works (User 30.10.2026): this group sits above Feedback
-  const TOP_GROUP = 'Wartet auf Postfach';
+  const TOP_GROUP = 'Freya Erstmails';
   // Vorbewertung: Label und Farbe; Farbe nur als Semantik (grün = los, gelb = Achtung), sonst neutral
   const VORB = {
     go: { label: 'Umsetzbar', cls: 'bg-green-50 text-green-700' },

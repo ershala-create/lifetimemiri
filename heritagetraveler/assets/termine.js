@@ -20,9 +20,10 @@ const TerminePlan = (() => {
     gelb: { label: 'In Verhandlung', dot: 'bg-amber-400', pill: 'bg-amber-50 text-amber-700', cell: 'bg-amber-400 text-zinc-900', bar: 'bg-amber-400' },
     rot: { label: 'Achtung', dot: 'bg-red-500', pill: 'bg-red-50 text-red-700', cell: 'bg-red-500 text-white', bar: 'bg-red-500' },
     grau: { label: 'Angebotenes Fenster', dot: 'bg-white border border-dashed border-zinc-400', pill: 'bg-zinc-100 text-zinc-600', cell: 'bg-white border border-dashed border-zinc-400 text-zinc-700', bar: 'bg-zinc-300' },
+    vergangen: { label: 'Durchgeführt', dot: 'bg-zinc-400', pill: 'bg-zinc-100 text-zinc-600', cell: 'bg-zinc-300 text-zinc-700', bar: 'bg-zinc-400' },
     event: { label: 'Anderer Termin', dot: 'bg-zinc-900', pill: 'bg-zinc-900 text-white', cell: 'bg-zinc-900 text-white', bar: 'bg-zinc-900' },
   };
-  const PRIO = { rot: 4, gruen: 3, gelb: 2, grau: 1 };
+  const PRIO = { rot: 4, gruen: 3, gelb: 2, grau: 1, vergangen: 0 };
   const BALL = { miri: 'Miri ist am Zug', hotel: 'Hotel ist am Zug' };
   const TODO_DOT = { rot: 'bg-red-500', gelb: 'bg-amber-400', gruen: 'bg-green-500' };
   const TODO_ORDER = { rot: 0, gelb: 1, gruen: 2 };
@@ -37,7 +38,7 @@ const TerminePlan = (() => {
     ferien: { title: 'Schulferien und Feiertage', sub: 'Ab heute.' },
   };
 
-  let state = { model: null, status: {}, lastFocus: null, current: null };
+  let state = { model: null, status: {}, lastFocus: null, current: null, view: 'kalender', viewInit: false, data: null };
 
   // ---------- Helfer ----------
   const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -139,6 +140,25 @@ const TerminePlan = (() => {
     });
     items.sort((a, b) => (a.von < b.von ? -1 : a.von > b.von ? 1 : a.bis < b.bis ? -1 : a.bis > b.bis ? 1 : 0));
 
+    // Vergangene Kooperationen (Status kooperiert, Ende vor heute): nur Anzeige im Kalender und in der Tabelle, nie Teil von Konflikten, Listen oder Zählern
+    const pastItems = [];
+    hotels.forEach((h) => {
+      if (h.status !== 'kooperiert' || !isIso(h.termin_von)) return;
+      const bis = isIso(h.termin_bis) ? h.termin_bis : h.termin_von;
+      if (bis >= today) return;
+      pastItems.push({ key: 'h:' + h.id, hotel: h, art: 'fix', past: true, ampel: 'vergangen', von: h.termin_von, bis, titel: h.hotelname, notiz: '', konflikte: [] });
+    });
+    pastItems.sort((a, b) => (a.von < b.von ? -1 : a.von > b.von ? 1 : 0));
+    const pastMonths = [];
+    if (pastItems.length) {
+      let y = +pastItems[0].von.slice(0, 4), m = +pastItems[0].von.slice(5, 7) - 1;
+      while (y * 12 + m < start.getFullYear() * 12 + start.getMonth() && pastMonths.length < 36) {
+        pastMonths.push({ y, m });
+        m += 1; if (m > 11) { m = 0; y += 1; }
+      }
+    }
+    const calStartAll = pastMonths.length ? isoOf(pastMonths[0].y, pastMonths[0].m, 1) : calStart;
+
     // Überschneidungen: nur wenn mindestens eine Seite fix, in Verhandlung oder ein Event ist
     const commit = (x) => x.art === 'fix' || x.art === 'verhandlung' || x.art === 'event';
     const sameHotel = (a, b) => a.hotel && b.hotel && a.hotel.id === b.hotel.id;
@@ -170,7 +190,7 @@ const TerminePlan = (() => {
     });
 
     // Hauptmonat: bei Terminen über zwei Monate steht der Eintrag nur in dem Monat mit den meisten Tagen
-    items.forEach((it) => {
+    items.concat(pastItems).forEach((it) => {
       const count = {};
       eachDay(it.von, it.bis, (d) => { const ym = d.slice(0, 7); count[ym] = (count[ym] || 0) + 1; });
       let best = it.von.slice(0, 7), n = 0;
@@ -181,8 +201,8 @@ const TerminePlan = (() => {
     // Kalendertage: der wichtigste Eintrag gewinnt (rot vor grün vor gelb vor grau), Events getrennt
     const dayMap = {};
     const eventDays = {};
-    items.forEach((it) => {
-      eachDay(it.von < calStart ? calStart : it.von, it.bis > calEnd ? calEnd : it.bis, (d) => {
+    items.concat(pastItems).forEach((it) => {
+      eachDay(it.von < calStartAll ? calStartAll : it.von, it.bis > calEnd ? calEnd : it.bis, (d) => {
         if (it.art === 'event') { (eventDays[d] = eventDays[d] || []).push(it); return; }
         const cur = dayMap[d];
         if (!cur || PRIO[it.ampel] > PRIO[cur.ampel]) dayMap[d] = it;
@@ -226,11 +246,11 @@ const TerminePlan = (() => {
       (TODO_ORDER[a.prio] ?? 1) - (TODO_ORDER[b.prio] ?? 1) || String(a.frist || '9999').localeCompare(String(b.frist || '9999')));
 
     return {
-      today, items, open, months, ferien: ferien || [], ferienDay, dayMap, eventDays, todos: todoList, bundeslaender,
+      today, items, pastItems, pastMonths, allItems: items.concat(pastItems), open, months, ferien: ferien || [], ferienDay, dayMap, eventDays, todos: todoList, bundeslaender,
       lists: { fixUpcoming, fixPast, verhRows, achtungRows, fensterRows, ferienRows },
       counts: { fix: fixUpcoming.length, verhandlung: verhRows.length, rot: achtungRows.length, fenster: fensterRows.length, ferien: ferienRows.length, open: open.length },
       windows,
-      byKey: new Map(items.map((i) => [i.key, i])),
+      byKey: new Map(items.concat(pastItems).map((i) => [i.key, i])),
       byId,
     };
   }
@@ -351,7 +371,7 @@ const TerminePlan = (() => {
         : `<span class="${cls}"${f ? ` title="${esc(f.name)}"` : ''}>${d}${dot}</span>`;
     }
     // multi-month items are listed once, in their main month; hotels first, other appointments separated below
-    const entries = model.items.filter((i) => i.mainYM === ym);
+    const entries = model.allItems.filter((i) => i.mainYM === ym);
     const lineHtml = (i) => {
       const dot = i.art === 'event' ? '<span class="mt-1 shrink-0 inline-block w-2 h-2 rounded-full bg-zinc-900" aria-hidden="true"></span>' : dotHtml(i.ampel);
       const muted = i.art === 'angebot' ? ' text-zinc-500' : ' text-zinc-900';
@@ -372,11 +392,60 @@ const TerminePlan = (() => {
     </section>`;
   }
 
+  // Umschalter Kalender | Tabelle (die Wahl bleibt im Browser erhalten)
+  function viewToggle() {
+    const btn = (key, label) => `<button type="button" data-view="${key}" aria-pressed="${state.view === key}" class="px-3 text-xs rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-900/20 ${state.view === key ? 'bg-zinc-900 text-white' : 'text-zinc-600 hover:bg-zinc-100'}" style="min-height:36px">${label}</button>`;
+    return `<div class="inline-flex gap-1 p-1 rounded-xl border border-zinc-200 bg-white" role="group" aria-label="Ansicht">${btn('kalender', 'Kalender')}${btn('tabelle', 'Tabelle')}</div>`;
+  }
+
   function calendarHtml(model) {
     const wo = model.bundeslaender.length ? ' in ' + model.bundeslaender.join(' und ') : '';
+    const pm = model.pastMonths;
+    const past = pm.length
+      ? `<details class="mt-4"><summary class="cursor-pointer select-none text-xs text-zinc-500 hover:text-zinc-900 py-3" style="min-height:44px">Vergangene Monate anzeigen (${esc(MONTHS[pm[0].m] + ' ' + pm[0].y)} bis ${esc(MONTHS[pm[pm.length - 1].m] + ' ' + pm[pm.length - 1].y)}), ${model.pastItems.length} durchgeführte Kooperationen</summary>
+        <div class="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4 mt-2">${pm.map((mo) => monthCal(model, mo.y, mo.m)).join('')}</div></details>`
+      : '';
     return `<section class="mb-8">
-      ${sectionHead('Kalender', null, `Farbige Tage sind Hotelkooperationen. Der Streifen unter einem Tag zeigt Schulferien (dunkel) und Feiertage (hell)${wo}. Tippe auf einen Tag, einen Eintrag oder einen Chip oben.`)}
+      <div class="mb-3">${viewToggle()}</div>
+      ${sectionHead('Kalender', null, `Farbige Tage sind Hotelkooperationen, graue sind bereits durchgeführt. Der Streifen unter einem Tag zeigt Schulferien (dunkel) und Feiertage (hell)${wo}. Tippe auf einen Tag, einen Eintrag oder einen Chip oben.`)}
       <div class="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4">${model.months.map((mo) => monthCal(model, mo.y, mo.m)).join('')}</div>
+      ${past}
+    </section>`;
+  }
+
+  // ---- Tabelle: alle Kooperationen und Termine auf einen Blick ----
+  function tableRow(r) {
+    const status = r.ampel ? pillHtml(r.ampel, r.statusText) : `<span class="shrink-0 text-xs rounded-full px-2 py-1 ${r.pillCls}">${esc(r.statusText)}</span>`;
+    return `<li class="${r.past ? 'opacity-70' : ''}"><button type="button" data-open="${esc(r.key)}" class="grid w-full grid-cols-1 sm:grid-cols-[150px_minmax(0,1.3fr)_140px_136px_minmax(0,1.6fr)] gap-x-3 gap-y-1 items-baseline text-left px-2 py-3 rounded-lg hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-900/20">
+      <span class="text-xs tabular-nums text-zinc-600">${esc(r.von ? fmtList(r.von, r.bis) : 'Datum offen')}</span>
+      <span class="text-sm text-zinc-900 break-words">${esc(r.name)}</span>
+      <span class="text-xs text-zinc-500">${esc(r.ort)}</span>
+      <span class="flex flex-wrap items-center gap-1">${status}</span>
+      <span class="text-xs text-zinc-500 break-words">${esc(r.info)}</span>
+    </button></li>`;
+  }
+
+  function tableHtml(model) {
+    const info = (h) => cut(h.aktuell || h.antwort_stand || '', 120);
+    const rowOf = (i) => {
+      if (i.art === 'event') return { key: i.key, von: i.von, bis: i.bis, name: i.titel, ort: '', ampel: 'event', info: cut(i.notiz, 120) };
+      const h = i.hotel;
+      const ball = !i.past && h.ball_bei && BALL[h.ball_bei] ? BALL[h.ball_bei] + ' · ' : '';
+      return { key: i.key, von: i.von, bis: i.bis, name: h.hotelname, ort: place(h), ampel: i.ampel, past: !!i.past, info: ball + info(h) };
+    };
+    const upcoming = model.items.filter((i) => i.art === 'fix' || i.art === 'verhandlung' || i.art === 'event').map(rowOf);
+    const openRows = model.open.map((h) => ({ key: 'o:' + h.id, von: null, bis: null, name: h.hotelname, ort: place(h), statusText: 'Zusage, Datum offen', pillCls: AMPEL.gelb.pill, info: (h.ball_bei && BALL[h.ball_bei] ? BALL[h.ball_bei] + ' · ' : '') + info(h) }));
+    const past = model.pastItems.slice().sort((a, b) => (a.von < b.von ? 1 : a.von > b.von ? -1 : 0)).map(rowOf);
+    const head = `<div class="hidden sm:grid grid-cols-[150px_minmax(0,1.3fr)_140px_136px_minmax(0,1.6fr)] gap-x-3 px-2 pb-1 text-xs text-zinc-400"><span>Zeitraum</span><span>Haus</span><span>Bundesland / Land</span><span>Stand</span><span>Aktuell</span></div>`;
+    const group = (label, rows) => rows.length ? `${groupHead(label, rows.length)}${head}<ul class="divide-y divide-zinc-100">${rows.map(tableRow).join('')}</ul>` : '';
+    const total = upcoming.filter((r) => r.ampel !== 'event').length + openRows.length + past.length;
+    return `<section class="mb-8">
+      <div class="mb-3">${viewToggle()}</div>
+      ${sectionHead('Tabelle', total, 'Alle Kooperationen auf einen Blick: anstehende, Zusagen ohne Datum und bereits durchgeführte, dazu andere Termine. Tippe auf eine Zeile für die Details.')}
+      <div class="bg-white border border-zinc-200 rounded-xl card-shadow px-2 pb-3">
+        ${group('Anstehend', upcoming)}${group('Zusage, Datum offen', openRows)}${group('Bisher durchgeführt', past)}
+        ${total + upcoming.filter((r) => r.ampel === 'event').length === 0 ? '<p class="text-sm text-zinc-500 p-3">Keine Einträge.</p>' : ''}
+      </div>
     </section>`;
   }
 
@@ -572,7 +641,7 @@ const TerminePlan = (() => {
         <p class="text-sm text-zinc-800 mt-4">${esc(fmtRange(item.von, item.bis))} · ${esc(relText(item.von, item.bis, model.today))}</p>
         ${item.notiz ? `<div class="mt-3 text-sm text-zinc-800" style="white-space:pre-line">${esc(item.notiz)}</div>` : ''}`;
     }
-    const mine = model.items.filter((i) => i.hotel && i.hotel.id === h.id);
+    const mine = model.allItems.filter((i) => i.hotel && i.hotel.id === h.id);
     const main = mine.find((i) => i.art === 'fix' || i.art === 'verhandlung') || null;
     const ampel = main ? main.ampel : null;
     const st = status[h.status];
@@ -682,9 +751,26 @@ const TerminePlan = (() => {
   function render(root, data) {
     const model = build(data);
     state.model = model;
+    state.data = data;
     state.status = data.status || {};
-    root.innerHTML = headerHtml(model, data.hinweis) + todoHtml(model) + legendHtml(model) + calendarHtml(model) + staysHtml(model) + openHtml(model) + eventsHtml(model);
+    if (!state.viewInit) {
+      state.viewInit = true;
+      try { if (localStorage.getItem('ht_termine_view') === 'tabelle') state.view = 'tabelle'; } catch (_) { /* Browser ohne Speicher: Kalender bleibt */ }
+    }
+    const body = state.view === 'tabelle'
+      ? tableHtml(model)
+      : calendarHtml(model) + staysHtml(model) + openHtml(model) + eventsHtml(model);
+    root.innerHTML = headerHtml(model, data.hinweis) + todoHtml(model) + legendHtml(model) + body;
     root.onclick = (e) => {
+      const v = e.target.closest('[data-view]');
+      if (v && root.contains(v)) {
+        state.view = v.dataset.view === 'tabelle' ? 'tabelle' : 'kalender';
+        try { localStorage.setItem('ht_termine_view', state.view); } catch (_) { /* nicht schlimm */ }
+        render(root, state.data);
+        const again = root.querySelector && root.querySelector(`[data-view="${state.view}"]`);
+        if (again && again.focus) again.focus();
+        return;
+      }
       const b = e.target.closest('[data-open]');
       if (b && root.contains(b)) openModal(b.dataset.open, b);
     };
