@@ -163,7 +163,9 @@ const TerminePlan = (() => {
     const commit = (x) => x.art === 'fix' || x.art === 'verhandlung' || x.art === 'event';
     const sameHotel = (a, b) => a.hotel && b.hotel && a.hotel.id === b.hotel.id;
     items.forEach((it) => {
-      it.konflikte = items.filter((o) => o !== it && !sameHotel(it, o) && o.von <= it.bis && o.bis >= it.von && (commit(it) || commit(o)));
+      // Check-out am selben Tag wie das Check-in eines anderen Aufenthalts (Übergabetag) ist kein Konflikt
+      const handover = (a, b) => a.von < a.bis && b.von < b.bis && (a.bis === b.von || b.bis === a.von);
+      it.konflikte = items.filter((o) => o !== it && !sameHotel(it, o) && o.von <= it.bis && o.bis >= it.von && !handover(it, o) && (commit(it) || commit(o)));
     });
     // Ampel je Eintrag
     items.forEach((it) => {
@@ -182,8 +184,10 @@ const TerminePlan = (() => {
         it.ampel = 'rot';
         it.ampelGrund = 'Miri muss bald antworten';
       } else if (fixConflict) {
-        it.ampel = 'rot';
-        it.ampelGrund = 'Überschneidung mit einem fixen Termin';
+        // Hierarchie: der fixe Termin hat Vorrang, ein noch nicht bestätigter Vorschlag daneben ist kein Alarm, sondern wird gelb mit Hinweis
+        const fixNames = [...new Set(it.konflikte.filter((k) => k.art === 'fix').map((k) => k.titel))].join(', ');
+        it.ampel = 'gelb';
+        it.ampelGrund = 'Überschneidet sich mit dem fixen Termin ' + fixNames + '. Der fixe Termin hat Vorrang, dieser Vorschlag ist noch nicht bestätigt.';
       } else {
         it.ampel = 'gelb';
       }
@@ -656,7 +660,8 @@ const TerminePlan = (() => {
         ${i.notiz && !verlauf ? `<div class="text-xs text-zinc-500 mt-1">${esc(i.notiz)}</div>` : ''}
       </li>`).join('') : '<li class="text-sm text-zinc-500">Noch kein Termin vereinbart.</li>';
     const konfl = [];
-    mine.forEach((i) => (i.konflikte || []).forEach((k) => konfl.push(`${k.titel} (${fmtShort(k.von, k.bis)})`)));
+    // Hierarchie: bei einem fixen Termin zählen nur andere fixe Termine als Überschneidung, Vorschläge und Fenster daneben sind nachrangig
+    mine.forEach((i) => (i.konflikte || []).forEach((k) => { if (i.art === 'fix' && k.art !== 'fix') return; konfl.push(`${k.titel} (${fmtShort(k.von, k.bis)})`); }));
     const konflHtml = konfl.length ? `<div class="mt-3 rounded-lg bg-amber-50 text-amber-700 text-sm p-3">Überschneidung mit ${esc([...new Set(konfl)].join('; '))}</div>` : '';
     // short version first; the long text (hotels.vereinbarung) stays available but folded
     const kurzSrc = h.vereinbarung_kurz || h.vereinbarung || '';

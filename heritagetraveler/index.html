@@ -155,20 +155,26 @@
 
       <!-- ===================== HOTELS-PANEL (Alle + Hotels) ===================== -->
       <div id="hotels-panel">
-      <div class="flex flex-wrap items-center gap-2 mb-3">
-        <input id="search" type="search" placeholder="Suche: Hotel, Ort, Gruppe, E-Mail…"
-          class="min-w-0 w-full sm:flex-1 sm:w-auto sm:min-w-[200px] px-3 py-2 rounded-lg border border-zinc-200 bg-white focus:outline-none focus:ring-2 focus:ring-zinc-900/10" />
-        <select id="filter-status" class="px-3 py-2 rounded-lg border border-zinc-200 bg-white text-zinc-700"></select>
-        <select id="filter-land" class="px-3 py-2 rounded-lg border border-zinc-200 bg-white text-zinc-700"></select>
-        <select id="filter-gruppe" class="px-3 py-2 rounded-lg border border-zinc-200 bg-white text-zinc-700"></select>
-        <select id="group-by" class="px-3 py-2 rounded-lg border border-zinc-200 bg-white text-zinc-700">
-          <option value="">Gruppierung: keine</option>
-          <option value="land">nach Land</option>
-          <option value="region">nach Region</option>
-          <option value="gruppe">nach Gruppe</option>
-          <option value="status">nach Status</option>
-        </select>
-        <button id="export-btn" class="px-3 py-2 rounded-lg border border-zinc-200 bg-white hover:bg-zinc-50 transition-colors whitespace-nowrap">CSV Export</button>
+      <div class="mb-3">
+        <div class="flex items-center gap-2">
+          <input id="search" type="search" placeholder="Suche: Hotel, Ort, Gruppe, E-Mail…"
+            class="min-w-0 flex-1 px-3 py-2 rounded-lg border border-zinc-200 bg-white focus:outline-none focus:ring-2 focus:ring-zinc-900/10" />
+          <button id="more-filters-btn" type="button" aria-expanded="false" aria-controls="more-filters"
+            class="shrink-0 px-2 text-xs text-zinc-500 hover:text-zinc-900 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-900/20" style="min-height:40px">Mehr Filter ▾</button>
+        </div>
+        <div id="more-filters" class="hidden flex flex-wrap items-center gap-2 mt-2">
+          <select id="filter-status" class="px-3 py-2 rounded-lg border border-zinc-200 bg-white text-zinc-700"></select>
+          <select id="filter-land" class="px-3 py-2 rounded-lg border border-zinc-200 bg-white text-zinc-700"></select>
+          <select id="filter-gruppe" class="px-3 py-2 rounded-lg border border-zinc-200 bg-white text-zinc-700"></select>
+          <select id="group-by" class="px-3 py-2 rounded-lg border border-zinc-200 bg-white text-zinc-700">
+            <option value="">Gruppierung: keine</option>
+            <option value="land">nach Land</option>
+            <option value="region">nach Region</option>
+            <option value="gruppe">nach Gruppe</option>
+            <option value="status">nach Status</option>
+          </select>
+          <button id="export-btn" class="px-3 py-2 rounded-lg border border-zinc-200 bg-white hover:bg-zinc-50 transition-colors whitespace-nowrap">CSV Export</button>
+        </div>
       </div>
 
       <!-- Quick-Filter (Schnellzugriffe) -->
@@ -305,8 +311,8 @@
     </div>
   </div>
 
-  <script src="assets/termine.js?v=4" defer></script>
+  <script src="assets/termine.js?v=6" defer></script>
   <script src="assets/backlog.js?v=4" defer></script>
-  <script src="assets/app.js?v=39" defer></script>
+  <script src="assets/app.js?v=40" defer></script>
 </body>
 </html>

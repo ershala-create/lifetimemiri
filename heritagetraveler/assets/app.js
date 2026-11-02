@@ -378,7 +378,17 @@ function getFiltered() {
 }
 
 // ===================== RENDER =====================
+// "Mehr Filter": Status, Land, Gruppe und Gruppierung stehen eingeklappt hinter einem dezenten Knopf, die Zahl zeigt aktive Auswahlen
+let moreFiltersOpen = false;
+function updateMoreFilters() {
+  const n = ['filter-status', 'filter-land', 'filter-gruppe', 'group-by'].filter((id) => $(id).value).length;
+  $('more-filters-btn').textContent = 'Mehr Filter' + (n ? ' · ' + n + ' aktiv' : '') + (moreFiltersOpen ? ' ▴' : ' ▾');
+  $('more-filters-btn').setAttribute('aria-expanded', String(moreFiltersOpen));
+  $('more-filters').classList.toggle('hidden', !moreFiltersOpen);
+}
+
 function render() {
+  updateMoreFilters();
   const rows = getFiltered();
   $('count-badge').textContent = `${rows.length} von ${allHotels.length} Hotels`;
   renderChips();
@@ -1040,6 +1050,7 @@ document.querySelectorAll('th[data-sort]').forEach((th) => {
 });
 
 $('export-btn').addEventListener('click', exportCsv);
+$('more-filters-btn').addEventListener('click', () => { moreFiltersOpen = !moreFiltersOpen; updateMoreFilters(); });
 
 // ---- Tab-Umschaltung (Alle / Hotels / Gruppen) ----
 document.querySelectorAll('.tab-btn').forEach((b) => {
